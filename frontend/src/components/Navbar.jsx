@@ -50,15 +50,25 @@ const Navbar = () => {
                     </div>
                   </button>
                   <ul className="dropdown-menu dropdown-menu-end shadow border-0 mt-2 p-2 rounded-3">
-                    <li><span className="dropdown-item-text fw-bold border-bottom pb-2">Welcome, {user.username}!</span></li>
-                    <li><Link className="dropdown-item mt-2 rounded-2" to="/my-listings">My Bookings</Link></li>
-                    <li><hr className="dropdown-divider" /></li>
-                    <li>
-                      <button className="dropdown-item text-danger fw-bold rounded-2" onClick={handleLogout}>
-                        Logout
-                      </button>
-                    </li>
-                  </ul>
+                  {user && (
+                       <li><span className="dropdown-item-text fw-bold border-bottom mb-2 text-danger">Hi, {user.username}</span></li>
+                     )}
+  
+                   {/* 1. Purana Link: Add Property */}
+                   <li><Link className="dropdown-item rounded-2" to="/new">Airbnb your home</Link></li>
+
+               {/* 2. NAYA LINK: YAHAN ADD KAREIN 🚀 */}
+                 <li><Link className="dropdown-item mt-1 rounded-2" to="/my-bookings">My Bookings</Link></li>
+  
+                   <li><hr className="dropdown-divider" /></li>
+  
+                {/* 3. Logout Button */}
+            <li>
+                <button className="dropdown-item text-danger fw-bold rounded-2" onClick={handleLogout}>
+                    Logout
+                   </button>
+               </li>
+              </ul>
                 </li>
               </>
             ) : (
@@ -70,6 +80,9 @@ const Navbar = () => {
                 <li className="nav-item">
                   <Link className="btn btn-danger rounded-pill px-4 fw-bold shadow-sm" to="/login">Log in</Link>
                 </li>
+               
+               <li><Link className="dropdown-item mt-2 rounded-2" to="/my-bookings">My Bookings</Link></li>
+
               </>
             )}
           </ul>

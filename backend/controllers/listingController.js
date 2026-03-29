@@ -1,4 +1,5 @@
 const Listing = require('../models/Listing');
+const Booking = require('../models/Booking');
 
 // 1. Saare listings dekhne ke liye + SEARCH & FILTER (Updated)
 const getAllListings = async (req, res) => {
@@ -113,5 +114,33 @@ const addReview = async (req, res) => {
     }
 };
 
+
+// 7. NEW: Booking Listing Function
+const bookListing = async (req, res) => {
+    try {
+        const { checkIn, checkOut, totalPrice } = req.body;
+        const newBooking = await Booking.create({
+            listing: req.params.id,
+            user: req.user.id,
+            checkIn,
+            checkOut,
+            totalPrice
+        });
+        res.status(201).json({ message: "Booking confirmed! 🎉", newBooking });
+    } catch (error) { res.status(400).json({ message: error.message }); }
+};
+
+
+// 8. User ki saari bookings dikhane ke liye
+const getUserBookings = async (req, res) => {
+    try {
+        const bookings = await Booking.find({ user: req.user.id })
+            .populate('listing', 'title image location price');
+        res.status(200).json(bookings);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // module.exports mein 'addReview' ko bhi add karein
-module.exports = { getAllListings, getListingById, createListing, updateListing, deleteListing, addReview };
+module.exports = { getAllListings, getListingById, createListing, updateListing, deleteListing, addReview, bookListing, getUserBookings };

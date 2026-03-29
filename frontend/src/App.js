@@ -7,6 +7,7 @@ import ListingDetail from './pages/ListingDetail';
 import EditListing from './pages/EditListing';     
 import Signup from './pages/Signup';
 import Login from './pages/Login';
+import MyBookings from './pages/MyBookings';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route path="/edit/:id" element={<EditListing />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/my-bookings" element={<MyBookings />} />
         </Routes>
       </div>
 

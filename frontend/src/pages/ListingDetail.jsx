@@ -8,7 +8,8 @@ const ListingDetail = () => {
     const [listing, setListing] = useState(null);
     const [loading, setLoading] = useState(true);
     
-    // States for Review Form
+    const [checkIn, setCheckIn] = useState("");
+    const [checkOut, setCheckOut] = useState("");
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState("");
 
@@ -29,26 +30,59 @@ const ListingDetail = () => {
         fetchListing();
     }, [id]);
 
+    // 1. Owner Check Logic
+    const isOwner = user && listing && (
+        String(user.id || user._id) === String(listing.owner?._id || listing.owner)
+    );
+
+    const handleBooking = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return alert("Please login to book!");
+        if (!checkIn || !checkOut) return alert("Please select dates!");
+
+        const nights = (new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24);
+        if (nights <= 0) return alert("Check-out date must be after check-in!");
+
+        try {
+            await axios.post(`http://localhost:5000/api/listings/${id}/book`, 
+                { checkIn, checkOut, totalPrice: nights * listing.price },
+                { headers: { 'Authorization': token } }
+            );
+            alert("Booking Successful! 🎉");
+            navigate('/my-bookings');
+        } catch (err) {
+            alert("Booking failed!");
+        }
+    };
+
+    const handleDelete = async () => {
+        const token = localStorage.getItem('token');
+        if (window.confirm("Are you sure you want to delete this stay?")) {
+            try {
+                await axios.delete(`http://localhost:5000/api/listings/${id}`, {
+                    headers: { 'Authorization': token }
+                });
+                alert("Deleted! ✅");
+                navigate('/');
+            } catch (err) {
+                alert("Delete failed!");
+            }
+        }
+    };
+
     const handleReviewSubmit = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem('token');
-        if (!token) return alert("Please login first!");
-
+        if (!token) return alert("Login first!");
         try {
-            // Backend Controller ka endpoint: POST /api/listings/:id/reviews
             await axios.post(`http://localhost:5000/api/listings/${id}/reviews`, 
                 { rating: Number(rating), comment },
                 { headers: { 'Authorization': token } }
             );
-            
-            alert("Review submitted! ⭐");
+            alert("Review added! ⭐");
             setComment("");
-            setRating(5);
-            fetchListing(); // Data refresh bina page reload ke
-        } catch (err) {
-            console.error("Review Error:", err.response?.data);
-            alert(err.response?.data?.message || "Review failed! Check console.");
-        }
+            fetchListing();
+        } catch (err) { alert("Review failed!"); }
     };
 
     if (loading) return <div className="text-center mt-5"><h3>Loading...</h3></div>;
@@ -56,78 +90,77 @@ const ListingDetail = () => {
 
     return (
         <div className="container mt-5 mb-5">
-            <div className="row justify-content-center">
+            <div className="row">
                 <div className="col-md-8">
                     <img src={listing.image} className="img-fluid rounded-4 shadow mb-4" style={{width: '100%', height: '400px', objectFit: 'cover'}} alt="stay" />
-                    
                     <h1 className="fw-bold">{listing.title}</h1>
                     <p className="text-muted fs-5">{listing.location}, {listing.country}</p>
-                    <h4 className="text-danger fw-bold">₹{listing.price} / night</h4>
                     <hr />
-
-                    {/* LEAVE A REVIEW FORM */}
-                    {user && (
-                        <div className="card p-4 shadow-sm border-0 mb-5 bg-light">
-                            <h4 className="fw-bold mb-3">Leave a Review</h4>
-                            <form onSubmit={handleReviewSubmit}>
-                                <div className="mb-3">
-                                    <label className="form-label d-block fw-semibold">Rating (out of 5):</label>
-                                    <div className="d-flex gap-2">
-                                        {[1, 2, 3, 4, 5].map((star) => (
-                                            <i 
-                                                key={star}
-                                                className={`fa-star fs-3 ${star <= rating ? 'fa-solid text-warning' : 'fa-regular text-secondary'}`}
-                                                style={{ cursor: 'pointer' }}
-                                                onClick={() => setRating(star)}
-                                            ></i>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="mb-3">
-                                    <textarea 
-                                        className="form-control border-0 shadow-sm" 
-                                        placeholder="Write your experience..." 
-                                        rows="3" 
-                                        required
-                                        value={comment}
-                                        onChange={(e) => setComment(e.target.value)}
-                                    ></textarea>
-                                </div>
-                                <button className="btn btn-dark rounded-pill px-4">Submit</button>
-                            </form>
+                    <p className="text-secondary" style={{whiteSpace: 'pre-line'}}>{listing.description}</p>
+                    
+                    {/* 2. EDIT/DELETE BUTTONS (Only for Owner) */}
+                    {isOwner && (
+                        <div className="mt-4 p-3 border rounded-3 bg-light d-flex gap-3">
+                            <button className="btn btn-outline-dark px-4 fw-bold" onClick={() => navigate(`/edit/${id}`)}>Edit Property</button>
+                            <button className="btn btn-danger px-4 fw-bold" onClick={handleDelete}>Delete Property</button>
                         </div>
                     )}
+                </div>
 
-                    {/* REVIEWS DISPLAY SECTION */}
-                    <div className="mt-5">
-                        <h4 className="fw-bold mb-4"><i className="fa-solid fa-star me-2"></i>Reviews</h4>
-                        <div className="row">
-                            {listing.reviews && listing.reviews.length > 0 ? (
-                                listing.reviews.map((rev) => (
-                                    <div className="col-md-6 mb-3" key={rev._id}>
-                                        <div className="card h-100 p-3 border shadow-sm rounded-3">
-                                            <div className="d-flex align-items-center gap-2 mb-2">
-                                                <div className="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style={{width:'30px', height:'30px'}}>
-                                                    {rev.author?.username?.charAt(0) || 'U'}
-                                                </div>
-                                                <h6 className="mb-0 fw-bold">{rev.author?.username || 'Guest'}</h6>
-                                            </div>
-                                            
-                                            {/* VISUAL STARS LOGIC: Ise dhyan se copy karein */}
-                                            <div className="text-warning mb-2" style={{fontSize: '12px'}}>
-                                                {[...Array(5)].map((_, i) => (
-                                                    <i key={i} className={`${i < rev.rating ? 'fa-solid' : 'fa-regular'} fa-star`}></i>
-                                                ))}
-                                            </div>
-                                            
-                                            <p className="small text-secondary mb-0">{rev.comment}</p>
-                                        </div>
+               {/* RESERVATION CARD */}
+<div className="col-md-4">
+    {/* Maine yahan style mein zIndex: 10 add kiya hai */}
+    <div className="card shadow border-0 p-4 sticky-top" 
+         style={{ top: '100px', borderRadius: '15px', zIndex: 10 }}> 
+        
+        <h4 className="fw-bold">₹{listing.price} <span className="fs-6 fw-normal text-muted">night</span></h4>
+        
+        <div className="border rounded-3 mt-3">
+            <div className="p-2 border-bottom">
+                <label className="small fw-bold">CHECK-IN</label>
+                <input type="date" className="form-control border-0" onChange={(e)=>setCheckIn(e.target.value)} />
+            </div>
+            <div className="p-2">
+                <label className="small fw-bold">CHECK-OUT</label>
+                <input type="date" className="form-control border-0" onChange={(e)=>setCheckOut(e.target.value)} />
+            </div>
+        </div>
+
+        <button className="btn btn-danger w-100 mt-3 py-2 fw-bold fs-5 rounded-3" onClick={handleBooking}>
+            Reserve
+        </button>
+        <p className="text-center text-muted mt-2 small">You won't be charged yet</p>
+    </div>
+</div>
+            </div>
+
+            {/* REVIEWS SECTION */}
+            <div className="row mt-5">
+                <div className="col-md-8">
+                    <hr />
+                    <h4 className="fw-bold mb-4">Reviews</h4>
+                    {user && (
+                        <form onSubmit={handleReviewSubmit} className="mb-5">
+                            <div className="d-flex gap-2 mb-3">
+                                {[1,2,3,4,5].map(s => <i key={s} className={`fa-star fs-4 ${s<=rating?'fa-solid text-warning':'fa-regular text-secondary'}`} style={{cursor:'pointer'}} onClick={()=>setRating(s)}></i>)}
+                            </div>
+                            <textarea className="form-control mb-2 shadow-sm" rows="3" placeholder="Share your experience..." required value={comment} onChange={e=>setComment(e.target.value)}></textarea>
+                            <button className="btn btn-dark rounded-pill px-4">Submit Review</button>
+                        </form>
+                    )}
+
+                    <div className="row">
+                        {listing.reviews?.map((rev) => (
+                            <div className="col-md-6 mb-3" key={rev._id}>
+                                <div className="card p-3 border shadow-sm rounded-3">
+                                    <h6 className="fw-bold mb-1">@{rev.author?.username || 'Guest'}</h6>
+                                    <div className="text-warning mb-2" style={{fontSize:'12px'}}>
+                                        {[...Array(5)].map((_, i) => <i key={i} className={`${i < rev.rating ? 'fa-solid' : 'fa-regular'} fa-star`}></i>)}
                                     </div>
-                                ))
-                            ) : (
-                                <p className="text-muted ms-2">No reviews yet. Be the first to review!</p>
-                            )}
-                        </div>
+                                    <p className="small text-secondary mb-0">{rev.comment}</p>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

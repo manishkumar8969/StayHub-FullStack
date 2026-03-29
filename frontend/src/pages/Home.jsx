@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 const Home = () => {
   const [listings, setListings] = useState([]);
   const [search, setSearch] = useState("");
+  const [showTax, setShowTax] = useState(false); // 1. Tax State
 
   const categories = [
     { name: "Trending", icon: "fa-fire" },
@@ -18,92 +19,76 @@ const Home = () => {
     { name: "Arctic", icon: "fa-snowflake" },
   ];
 
-  // Data fetch karne ka function
   const fetchListings = async (queryParam = "") => {
     try {
       const res = await axios.get(`http://localhost:5000/api/listings${queryParam}`);
       setListings(res.data);
-    } catch (err) {
-      console.log(err);
-    }
+    } catch (err) { console.log(err); }
   };
 
-  useEffect(() => {
-    fetchListings();
-  }, []);
-
-  // Search handle karne ke liye
-  const handleSearch = (e) => {
-    e.preventDefault();
-    fetchListings(`?location=${search}`);
-  };
-
-  // Category filter handle karne ke liye
-  const handleCategory = (name) => {
-    fetchListings(`?category=${name}`);
-  };
+  useEffect(() => { fetchListings(); }, []);
 
   return (
     <div className="container mt-3">
-      {/* 1. SEARCH BAR SECTION */}
+      {/* SEARCH BAR SECTION */}
       <div className="row justify-content-center mb-4">
         <div className="col-md-6">
-          <form onSubmit={handleSearch} className="d-flex shadow-sm rounded-pill border p-1 bg-white">
-            <input 
-              type="text" 
-              className="form-control border-0 rounded-pill px-4" 
-              placeholder="Search destinations (e.g. Goa, Bihar)" 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <button className="btn btn-danger rounded-circle p-2 px-3 ms-2">
-              <i className="fa-solid fa-magnifying-glass"></i>
-            </button>
+          <form onSubmit={(e) => { e.preventDefault(); fetchListings(`?location=${search}`); }} className="d-flex shadow-sm rounded-pill border p-1 bg-white">
+            <input type="text" className="form-control border-0 rounded-pill px-4" placeholder="Search destinations" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <button className="btn btn-danger rounded-circle p-2 px-3 ms-2"><i className="fa-solid fa-magnifying-glass"></i></button>
           </form>
         </div>
       </div>
 
-      {/* 2. FILTER ICONS SECTION */}
-      <div className="d-flex overflow-auto text-center py-3 no-scrollbar gap-5 mb-4 justify-content-lg-center">
-        {categories.map((cat, index) => (
-          <div 
-            key={index} 
-            onClick={() => handleCategory(cat.name)}
-            style={{ opacity: "0.7", cursor: "pointer", minWidth: "80px" }} 
-            className="category-icon"
-          >
-            <i className={`fa-solid ${cat.icon} fs-4 mb-2`}></i>
-            <p style={{ fontSize: "12px", fontWeight: "600" }}>{cat.name}</p>
+      {/* FILTER & TAX TOGGLE SECTION */}
+      <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+        <div className="d-flex overflow-auto text-center py-2 no-scrollbar gap-4 flex-grow-1">
+          {categories.map((cat, index) => (
+            <div key={index} onClick={() => fetchListings(`?category=${cat.name}`)} style={{ opacity: "0.7", cursor: "pointer", minWidth: "80px" }} className="category-icon">
+              <i className={`fa-solid ${cat.icon} fs-4 mb-2`}></i>
+              <p style={{ fontSize: "12px", fontWeight: "600" }}>{cat.name}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 2. TAX TOGGLE SWITCH */}
+        <div className="tax-toggle shadow-sm">
+          <div className="form-check form-switch form-check-reverse">
+            <label className="form-check-label fw-bold small" htmlFor="flexSwitchCheckDefault">Display total before taxes</label>
+            <input 
+                className="form-check-input ms-3" 
+                type="checkbox" 
+                role="switch" 
+                id="flexSwitchCheckDefault" 
+                style={{cursor: 'pointer'}}
+                onChange={() => setShowTax(!showTax)} 
+            />
           </div>
-        ))}
+        </div>
       </div>
 
-      {/* 3. LISTINGS GRID */}
-      <div className="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
-        {listings.length > 0 ? listings.map((listing) => (
+      {/* LISTINGS GRID */}
+      <div className={`row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4 ${showTax ? 'show-tax' : ''}`}>
+        {listings.map((listing) => (
           <div className="col" key={listing._id}>
             <Link to={`/listings/${listing._id}`} className="text-decoration-none text-dark">
               <div className="card h-100 border-0 shadow-sm hover-card">
-                <img 
-                  src={listing.image} 
-                  className="card-img-top rounded-4" 
-                  alt={listing.title} 
-                  style={{ height: "250px", objectFit: "cover" }} 
-                />
+                <img src={listing.image} className="card-img-top rounded-4" alt="stay" style={{ height: "250px", objectFit: "cover" }} />
                 <div className="card-body px-1">
                   <h6 className="card-title fw-bold mb-0">{listing.location}, {listing.country}</h6>
-                  <p className="text-muted mb-0" style={{ fontSize: "14px" }}>{listing.title}</p>
-                  <p className="fw-bold mt-1 mb-0">₹{listing.price.toLocaleString()} night</p>
+                  <p className="text-muted mb-0 small">{listing.title}</p>
+                  
+                  {/* 3. PRICE CALCULATION LOGIC */}
+                  <p className="fw-bold mt-1 mb-0">
+                    ₹{showTax ? (listing.price * 1.18).toLocaleString() : listing.price.toLocaleString()} 
+                    <span className="fw-normal"> night</span>
+                    <i className="tax-info text-secondary fw-normal ms-1" style={{fontSize: '13px'}}> &nbsp;+18% GST</i>
+                  </p>
                 </div>
               </div>
             </Link>
           </div>
-        )) : (
-            <div className="col-12 text-center mt-5">
-                <h4>No stays found for this search! 🏡</h4>
-                <button className="btn btn-outline-danger mt-2" onClick={() => fetchListings()}>Show all stays</button>
-            </div>
-        )}
+        ))}
       </div>
     </div>
   );
