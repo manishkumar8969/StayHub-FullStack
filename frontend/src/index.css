@@ -11,3 +11,19 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.category-icon:hover {
+  opacity: 1 !important;
+  border-bottom: 2px solid black;
+}
+.hover-card:hover {
+  transform: translateY(-5px);
+  transition: 0.3s;
+}

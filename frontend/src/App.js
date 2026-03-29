@@ -1,22 +1,36 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer'; // 1. Footer Import kiya
 import Home from './pages/Home';
 import NewListing from './pages/NewListing';
 import ListingDetail from './pages/ListingDetail'; 
 import EditListing from './pages/EditListing';     
+import Signup from './pages/Signup';
+import Login from './pages/Login';
 
 function App() {
   return (
     <Router>
+      {/* Navbar hamesha top par rahega */}
       <Navbar /> 
-      <div className="container mt-5 pt-3">
+
+      {/* Main Content Area: minHeight isliye taaki footer hamesha bottom mein rahe */}
+      <div className="container mt-5 pt-3" style={{ minHeight: '80vh' }}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/add" element={<NewListing />} />
+          
+          {/* Path ko /new kar diya hai kyunki Navbar mein humne /new use kiya hai */}
+          <Route path="/new" element={<NewListing />} /> 
+          
           <Route path="/listings/:id" element={<ListingDetail />} />
           <Route path="/edit/:id" element={<EditListing />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/login" element={<Login />} />
         </Routes>
       </div>
+
+      {/* Footer hamesha bottom par rahega */}
+      <Footer />
     </Router>
   );
 }

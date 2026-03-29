@@ -1,58 +1,29 @@
+const express = require('express');
+const dotenv = require('dotenv');
+const cors = require('cors');
+const connectDB = require('./config/db');
 
-const express = require('express'); // Express ko bulaya
-const dotenv = require('dotenv');   // Secret files padhne ke liye
-const cors = require('cors'); 
-const colors = require('colors'); 
-const connectDB = require('./config/db');     // Frontend-Backend dosti ke liye
-
-// 1. Config: .env file ko load karna
 dotenv.config();
-
 connectDB();
 
-const listingRoutes = require('./routes/listingRoutes');
-
-// 2. Initialize: App banana
 const app = express();
 
-// 3. Middlewares: Data format samjhne ke liye
-app.use(express.json()); // JSON data handle karne ke liye
-app.use(cors());         // Cross-origin access allow karne ke liye
+// 1. Sabse upar CORS rakhein
+app.use(cors({
+    origin: 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'] // Explicitly allow Authorization
+}));
 
+app.use(express.json());
 
-// Routes Middleware
+// Routes
+const authRoutes = require('./routes/authRoutes');
+const listingRoutes = require('./routes/listingRoutes');
+
+app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
 
-// 4. Basic Route: Check karne ke liye ki server chal raha hai
-app.get('/', (req, res) => {
-    res.send("StayHub Server is Running... 🚀");
-});
-
-
-const Listing = require('./models/Listing'); // Model ko import karein
-
-// Test Route: Database mein data save karne ke liye
-app.get('/test-listing', async (req, res) => {
-    try {
-        const sampleListing = new Listing({
-            title: "My New Villa",
-            description: "Beautiful beach side villa",
-            price: 1200,
-            location: "Goa",
-            country: "India",
-        });
-
-        await sampleListing.save();
-        res.send("Success: Sample Listing Saved!");
-    } catch (err) {
-        res.status(500).send("Error: " + err.message);
-    }
-});
-
-
-
-// 5. Listen: Server ko start karna
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

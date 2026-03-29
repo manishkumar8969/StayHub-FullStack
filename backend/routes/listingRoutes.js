@@ -1,11 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { getAllListings, getListingById, createListing, updateListing, deleteListing } = require('../controllers/listingController');
+const { protect } = require('../middleware/auth');
 
-router.get('/', getAllListings);
-router.post('/', createListing);
-router.get('/:id', getListingById);     // Individual view route
-router.put('/:id', updateListing);      // Update route
-router.delete('/:id', deleteListing);   // Delete route
+// Dhyan dein: Ye naam wahi hone chahiye jo listingController.js mein module.exports mein hain
+const { 
+    getAllListings, 
+    getListingById, 
+    createListing, 
+    updateListing, 
+    deleteListing,
+    addReview
+} = require('../controllers/listingController');
+
+// Routes
+router.get('/', getAllListings); 
+router.get('/:id', getListingById); 
+router.post('/:id/reviews', protect, addReview);
+router.post('/', protect, createListing); 
+router.put('/:id', protect, updateListing); 
+router.delete('/:id', protect, deleteListing); 
 
 module.exports = router;
