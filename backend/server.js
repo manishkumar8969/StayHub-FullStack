@@ -32,7 +32,13 @@ const path = require('path');
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
 // Agar koi aisa route hit ho jo backend API nahi hai, toh React App serve karein
-app.get('/:path*', (req, res) => {
+// ✅ IS NAYE AUR 100% BULLETPROOF CODE KO LAGAEIN:
+app.use((req, res, next) => {
+    // Agar request backend ke routes (/api) ke liye hai, toh use aage jaane dein
+    if (req.url.startsWith('/api')) {
+        return next();
+    }
+    // Baaki sabhi requests ke liye seedha React ki index.html bhej dein
     res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
 });
 
