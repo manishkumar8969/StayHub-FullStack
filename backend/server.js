@@ -10,10 +10,9 @@ const app = express();
 
 // 1. Sabse upar CORS rakhein
 app.use(cors({
-    origin: 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'] // Explicitly allow Authorization
+    origin: "*", // Sabhi origins allow karne ke liye
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
 }));
 
 app.use(express.json());
@@ -26,4 +25,15 @@ app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
 
 const PORT = process.env.PORT || 5000;
+
+const path = require('path');
+
+// Frontend ke built files ko serve karne ke liye
+app.use(express.static(path.join(__dirname, '../frontend/build')));
+
+// Agar koi aisa route hit ho jo backend API nahi hai, toh React App serve karein
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

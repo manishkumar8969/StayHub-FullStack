@@ -14,11 +14,10 @@ const MyBookings = () => {
                 return;
             }
             try {
-                // Check karein ki URL 'listings' ke baad sahi hai
-                const res = await axios.get('http://localhost:5000/api/listings/user/my-bookings', {
-                    headers: { 'Authorization': token }
-                });
-                console.log("Bookings fetched:", res.data);
+                // useEffect ke andar fetchBookings function mein
+            const res = await axios.get('/api/listings/user/my-bookings', {
+                 headers: { 'Authorization': token }
+           });
                 setBookings(res.data);
             } catch (err) {
                 console.error("Fetch error:", err.response?.data || err.message);
@@ -35,13 +34,20 @@ const MyBookings = () => {
         <div className="container mt-5">
             <h2 className="fw-bold mb-4">My Bookings</h2>
             {bookings.length === 0 ? (
-                <div className="alert alert-info">Aapne abhi tak koi booking nahi ki hai.</div>
+                <div className="alert alert-info">You haven't made any bookings yet.</div>
             ) : (
                 <div className="row">
                     {bookings.map((b) => (
                         <div className="col-md-4 mb-4" key={b._id}>
                             <div className="card shadow-sm border-0 rounded-4 overflow-hidden">
-                                <img src={b.listing?.image} className="card-img-top" style={{height:'200px', objectFit:'cover'}} alt="stay" />
+                                <img 
+                                    src={b.listing?.images && b.listing.images.length > 0 
+                                        ? b.listing.images[0] 
+                                        : (b.listing?.image || "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=60")} 
+                                    className="card-img-top" 
+                                    style={{height:'200px', objectFit:'cover'}} 
+                                    alt="stay" 
+                                />
                                 <div className="card-body">
                                     <h5 className="fw-bold">{b.listing?.title || "Property Deleted"}</h5>
                                     <p className="text-muted mb-1">{b.listing?.location}</p>
@@ -49,8 +55,11 @@ const MyBookings = () => {
                                     <div className="small">
                                         <p className="mb-0"><b>Check-In:</b> {new Date(b.checkIn).toLocaleDateString()}</p>
                                         <p className="mb-2"><b>Check-Out:</b> {new Date(b.checkOut).toLocaleDateString()}</p>
-                                        <h6 className="fw-bold text-danger">Total: ₹{b.totalPrice}</h6>
+                                        <h6 className="fw-bold text-danger">Total: ₹{b.totalPrice.toLocaleString()}</h6>
                                     </div>
+                                    <Link to={`/listings/${b.listing?._id}`} className="btn btn-outline-dark btn-sm w-100 mt-2 rounded-pill">
+                                        View Property
+                                    </Link>
                                 </div>
                             </div>
                         </div>

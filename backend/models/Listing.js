@@ -1,23 +1,24 @@
 const mongoose = require('mongoose');
 
-const reviewSchema = new mongoose.Schema({
-    comment: { type: String, required: true },
-    rating: { type: Number, min: 1, max: 5, required: true },
-    author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    createdAt: { type: Date, default: Date.now }
-});
-
 const listingSchema = new mongoose.Schema({
     title: { type: String, required: true },
-    description: { type: String, required: true },
-    image: { type: String, default: "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1350&q=80" },
+    description: String,
+    // Array of Strings for multiple URLs
+    images: { 
+        type: [String], 
+        default: ["https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=60"] 
+    },
     price: { type: Number, required: true },
-    location: { type: String, required: true },
-    country: { type: String, required: true },
-    owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    // Naya Field: Reviews ka array
-    reviews: [reviewSchema]
+    location: String,
+    country: String,
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    reviews: [
+        {
+            rating: Number,
+            comment: String,
+            author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+        }
+    ]
 }, { timestamps: true });
 
-const Listing = mongoose.model('Listing', listingSchema);
-module.exports = Listing;
+module.exports = mongoose.model('Listing', listingSchema);

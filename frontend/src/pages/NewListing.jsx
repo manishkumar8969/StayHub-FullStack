@@ -1,122 +1,81 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const NewListing = () => {
-  const [formData, setFormData] = useState({ 
-    title: "", 
-    description: "", 
-    price: "", 
-    location: "", 
-    country: "", 
-    image: "" 
-  });
-  
-  const navigate = useNavigate();
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({
+        title: "", description: "", price: "", location: "", country: ""
+    });
+    const [selectedFiles, setSelectedFiles] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-  // 1. Frontend Protection: Check karein ki user logged in hai ya nahi
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      alert("Please login first to host a stay! 😊");
-      navigate('/login');
-    }
-  }, [navigate]);
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        const token = localStorage.getItem('token');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // LocalStorage se token nikalna
-    const token = localStorage.getItem('token');
+        const data = new FormData();
+        data.append("title", formData.title);
+        data.append("description", formData.description);
+        data.append("price", formData.price);
+        data.append("location", formData.location);
+        data.append("country", formData.country);
 
-    try {
-      // 2. Backend ko token ke saath request bhejna (Security ke liye)
-      await axios.post('http://localhost:5000/api/listings', formData, {
-        headers: {
-          'Authorization': token // Backend ka 'protect' middleware ise check karega
+        for (let i = 0; i < selectedFiles.length; i++) {
+            data.append("images", selectedFiles[i]);
         }
-      });
 
-      alert("Property Listed Successfully! 🏠");
-      navigate('/'); 
-    } catch (err) { 
-      console.error(err);
-      alert(err.response?.data?.message || "Error adding property"); 
-    }
-  };
+        try {
+            // handleSubmit function mein
+           await axios.post('/api/listings', data, {
+               headers: { 
+                   'Authorization': token,
+                   'Content-Type': 'multipart/form-data'
+          }
+        });
+            alert("Property Added with Gallery! 🏠");
+            navigate('/');
+        } catch (err) { 
+            console.error(err);
+            alert("Failed to add property!"); 
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  return (
-    <div className="row justify-content-center mt-4 mb-5">
-      <div className="col-md-8 bg-white p-4 rounded-4 shadow border">
-        <h3 className="text-center mb-4 fw-bold">List Your Property</h3>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-3">
-            <label className="form-label fw-semibold">Title</label>
-            <input 
-                type="text" 
-                className="form-control" 
-                placeholder="e.g. Cozy Beach Villa"
-                onChange={(e) => setFormData({...formData, title: e.target.value})} 
-                required 
-            />
-          </div>
-          <div className="mb-3">
-            <label className="form-label fw-semibold">Description</label>
-            <textarea 
-                className="form-control" 
-                rows="3"
-                placeholder="Tell us about your place..."
-                onChange={(e) => setFormData({...formData, description: e.target.value})} 
-                required
-            ></textarea>
-          </div>
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label fw-semibold">Price per Night (₹)</label>
-              <input 
-                type="number" 
-                className="form-control" 
-                onChange={(e) => setFormData({...formData, price: e.target.value})} 
-                required 
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label fw-semibold">Image URL</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="https://images.unsplash.com/..." 
-                onChange={(e) => setFormData({...formData, image: e.target.value})} 
-              />
-            </div>
-          </div>
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label fw-semibold">Location</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="e.g. Pune"
-                onChange={(e) => setFormData({...formData, location: e.target.value})} 
-                required 
-              />
-            </div>
-            <div className="col-md-6 mb-3">
-              <label className="form-label fw-semibold">Country</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="India"
-                onChange={(e) => setFormData({...formData, country: e.target.value})} 
-                required 
-              />
-            </div>
-          </div>
-          <button className="btn btn-danger w-100 fw-bold py-2 mt-3 fs-5">Create Stay</button>
-        </form>
-      </div>
-    </div>
-  );
+    return (
+        <div className="container mt-5 mb-5 shadow p-4 rounded-4 bg-white">
+            <h2 className="fw-bold mb-4 text-danger">Airbnb your home</h2>
+            <form onSubmit={handleSubmit} className="row g-3">
+                <div className="col-md-12">
+                    <label className="form-label fw-bold">Title</label>
+                    <input type="text" className="form-control" required onChange={e=>setFormData({...formData, title: e.target.value})} />
+                </div>
+                
+                <div className="col-md-12">
+                    <label className="form-label fw-bold text-primary">Upload Photos (Select up to 5)</label>
+                    <input 
+                        type="file" 
+                        className="form-control border-primary" 
+                        multiple 
+                        accept="image/*" 
+                        onChange={e => setSelectedFiles(e.target.files)} 
+                        required
+                    />
+                </div>
+
+                <div className="col-md-4"><label className="fw-bold">Price (per night)</label><input type="number" className="form-control" required onChange={e=>setFormData({...formData, price: e.target.value})} /></div>
+                <div className="col-md-4"><label className="fw-bold">Location</label><input type="text" className="form-control" required onChange={e=>setFormData({...formData, location: e.target.value})} /></div>
+                <div className="col-md-4"><label className="fw-bold">Country</label><input type="text" className="form-control" required onChange={e=>setFormData({...formData, country: e.target.value})} /></div>
+                <div className="col-12"><label className="fw-bold">Description</label><textarea className="form-control" rows="3" required onChange={e=>setFormData({...formData, description: e.target.value})}></textarea></div>
+                
+                <button className="btn btn-danger w-100 mt-4 py-2 fw-bold fs-5" disabled={loading}>
+                    {loading ? "Uploading... Please wait" : "Create Stay"}
+                </button>
+            </form>
+        </div>
+    );
 };
 
 export default NewListing;

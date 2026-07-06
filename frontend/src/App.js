@@ -8,6 +8,7 @@ import EditListing from './pages/EditListing';
 import Signup from './pages/Signup';
 import Login from './pages/Login';
 import MyBookings from './pages/MyBookings';
+import InfoPage from './pages/InfoPage';
 
 function App() {
   return (
@@ -28,6 +29,23 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
           <Route path="/my-bookings" element={<MyBookings />} />
+
+          // Pehle upar InfoPage ko import karein
+import InfoPage from './pages/InfoPage'; 
+
+// Fir Routes collection ke andar ye block paste kar dein:
+<Route path="/help-center" element={<InfoPage />} />
+<Route path="/aircover" element={<InfoPage />} />
+<Route path="/anti-discrimination" element={<InfoPage />} />
+<Route path="/host-home" element={<InfoPage />} />
+<Route path="/hosting-resources" element={<InfoPage />} />
+<Route path="/community-forum" element={<InfoPage />} />
+<Route path="/newsroom" element={<InfoPage />} />
+<Route path="/careers" element={<InfoPage />} />
+<Route path="/investors" element={<InfoPage />} />
+<Route path="/privacy" element={<InfoPage />} />
+<Route path="/terms" element={<InfoPage />} />
+
         </Routes>
       </div>
 
