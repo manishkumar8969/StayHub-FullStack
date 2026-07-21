@@ -1,6 +1,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const path = require('path');
 const connectDB = require('./config/db');
 
 dotenv.config();
@@ -8,37 +9,35 @@ connectDB();
 
 const app = express();
 
-// 1. Sabse upar CORS rakhein
+// 1. CORS Configuration
 app.use(cors({
-    origin: "*", // Sabhi origins allow karne ke liye
+    origin: "*", 
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
 }));
 
 app.use(express.json());
 
-// Routes
+// Routes Imports
 const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
+const bookingRoutes = require('./routes/bookingRoutes'); // 👈 Naya Booking Route import hua
 
+// API Routes Setup
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
+app.use('/api/bookings', bookingRoutes); // 👈 Naya Booking Route Endpoint connect hua
 
 const PORT = process.env.PORT || 5000;
 
-const path = require('path');
-
-// Frontend ke built files ko serve karne ke liye
+// Frontend static build serve karne ke liye
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// Agar koi aisa route hit ho jo backend API nahi hai, toh React App serve karein
-// ✅ IS NAYE AUR 100% BULLETPROOF CODE KO LAGAEIN:
+// Non-API requests ke liye React single page application serve karna
 app.use((req, res, next) => {
-    // Agar request backend ke routes (/api) ke liye hai, toh use aage jaane dein
     if (req.url.startsWith('/api')) {
         return next();
     }
-    // Baaki sabhi requests ke liye seedha React ki index.html bhej dein
     res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
 });
 

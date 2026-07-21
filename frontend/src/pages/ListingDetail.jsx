@@ -14,14 +14,12 @@ const ListingDetail = () => {
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState("");
 
-    // FIXED: API_BASE_URL ko clean rakha hai
     const API_BASE_URL = `/api/listings`; 
 
     const user = JSON.parse(localStorage.getItem('user'));
 
     const fetchListing = async () => {
         try {
-            // FIXED: URL double nahi hoga ab
             const res = await axios.get(`${API_BASE_URL}/${id}`);
             setListing(res.data);
         } catch (err) {
@@ -39,20 +37,39 @@ const ListingDetail = () => {
         String(user.id || user._id) === String(listing.owner?._id || listing.owner)
     );
 
+    // ✅ UPDATED: Dynamic Inventory-based Room Booking Logic
     const handleBooking = async () => {
         const token = localStorage.getItem('token');
         if (!token) return alert("Please login to book!");
         if (!checkIn || !checkOut) return alert("Please select dates!");
+        
         const nights = (new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24);
         if (nights <= 0) return alert("Check-out date must be after check-in!");
+
         try {
-            await axios.post(`${API_BASE_URL}/${id}/book`, 
-                { checkIn, checkOut, totalPrice: nights * listing.price },
+            const userId = user.id || user._id;
+            const totalPrice = nights * listing.price;
+
+            // Updated endpoint calling our new Booking Router
+            await axios.post(`/api/bookings/create`, 
+                { 
+                    hotelId: id,
+                    roomId: id, // Mapping listing ID to roomId for seamless compatibility
+                    userId: userId,
+                    checkInDate: checkIn,
+                    checkOutDate: checkOut,
+                    totalPrice: totalPrice,
+                    guests: []
+                },
                 { headers: { 'Authorization': token } }
             );
-            alert("Booking Successful! 🎉");
+
+            alert("Booking Successful! 🎉 Room reserved in inventory.");
             navigate('/my-bookings');
-        } catch (err) { alert("Booking failed!"); }
+        } catch (err) { 
+            const errorMsg = err.response?.data?.message || "Booking failed! Room might be fully booked.";
+            alert(errorMsg); 
+        }
     };
 
     const handleDelete = async () => {
