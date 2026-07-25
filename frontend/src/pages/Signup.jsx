@@ -3,26 +3,27 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const Signup = () => {
-  const [formData, setFormData] = useState({ username: "", email: "", password: "" });
+  const [formData, setFormData] = useState({ 
+    username: "", 
+    email: "", 
+    password: "",
+    role: "customer" // Default role customer rakha hai
+  });
   const navigate = useNavigate();
 
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      // Backend ko request bhej rahe hain
+      // Backend ko role ke saath request bhej rahe hain
       const res = await axios.post('/api/auth/register', formData);
       
-      // 🔥 AUTO-LOGIN LOGIC: 
-      // Backend se milne wale token aur user data ko save kar rahe hain
+      // AUTO-LOGIN LOGIC: Token aur User object (jisme role hai) save kar rahe hain
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
 
       alert(`Welcome to StayHub, ${res.data.user.username}! 🎉 Registration successful.`);
       
-      // Seedha Home page par bhej rahe hain (Login page ki zaroorat nahi)
       navigate('/'); 
-      
-      // Navbar ko refresh karne ke liye page reload
       window.location.reload(); 
       
     } catch (err) { 
@@ -32,8 +33,8 @@ const Signup = () => {
   };
 
   return (
-    <div className="row justify-content-center mt-5">
-      <div className="col-md-4 border p-4 shadow rounded bg-white">
+    <div className="row justify-content-center mt-5 mb-5">
+      <div className="col-md-4 border p-4 shadow rounded-4 bg-white">
         <h3 className="text-center mb-4 fw-bold text-danger">Join StayHub</h3>
         <form onSubmit={handleSignup}>
           <div className="mb-3">
@@ -66,7 +67,21 @@ const Signup = () => {
               required 
             />
           </div>
-          <button className="btn btn-danger w-100 fw-bold py-2 shadow-sm mt-2">
+
+          {/* 🎯 NAYA ROLE SELECTION DROPDOWN */}
+          <div className="mb-3">
+            <label className="form-label small fw-bold">I want to join as a:</label>
+            <select 
+              className="form-select border-danger-subtle fw-medium"
+              value={formData.role}
+              onChange={(e) => setFormData({...formData, role: e.target.value})}
+            >
+              <option value="customer">🧳 Guest (Book Stays)</option>
+              <option value="host">🏨 Host (List my Property/Hotel)</option>
+            </select>
+          </div>
+
+          <button className="btn btn-danger w-100 fw-bold py-2 shadow-sm mt-3 rounded-pill">
             Sign Up
           </button>
         </form>
