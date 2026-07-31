@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link, useLocation } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Fix default marker icon issue in Leaflet React
+// Fix Leaflet marker icons in React
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -13,9 +13,22 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Helper Component: Recenter Map automatically when markers change
+const MapBounds = ({ coords }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (coords.length > 0) {
+      const bounds = L.latLngBounds(coords.map(c => [c.lat, c.lng]));
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+    }
+  }, [coords, map]);
+  return null;
+};
+
 const Home = () => {
-  const [listings, setListings] = useState([]);
-  const [filteredListings, setFilteredListings] = useState([]);
+  const [rawListings, setRawListings] = useState([]);
+  const [displayListings, setDisplayListings] = useState([]);
+  const [mapCoords, setMapCoords] = useState([]);
   const [search, setSearch] = useState("");
   const [showTax, setShowTax] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -24,33 +37,93 @@ const Home = () => {
 
   const location = useLocation();
 
+  // 1. Fetch Listings from Backend
   const fetchListings = async (queryParam = "") => {
     try {
       const finalQuery = queryParam || location.search;
       const res = await axios.get(`/api/listings${finalQuery}`);
-      setListings(res.data);
-      setFilteredListings(res.data);
-    } catch (err) { 
-      console.log(err); 
+      setRawListings(res.data);
+    } catch (err) {
+      console.log("Error fetching listings:", err);
     }
   };
 
-  useEffect(() => { 
-    fetchListings(); 
+  useEffect(() => {
+    fetchListings();
   }, [location.search]);
 
-  // Combined Instant Filtering (Price + Amenities)
+  // 2. Combined Client-Side Filtering (Search + Price + Amenity)
   useEffect(() => {
-    let result = listings.filter(item => item.price <= maxPrice);
+    let result = [...rawListings];
 
-    if (selectedAmenity !== "All") {
+    // Search input filter
+    if (search.trim() !== "") {
+      const q = search.toLowerCase();
       result = result.filter(item => 
-        item.amenities && item.amenities.includes(selectedAmenity)
+        (item.location && item.location.toLowerCase().includes(q)) ||
+        (item.country && item.country.toLowerCase().includes(q)) ||
+        (item.title && item.title.toLowerCase().includes(q))
       );
     }
 
-    setFilteredListings(result);
-  }, [maxPrice, selectedAmenity, listings]);
+    // Price Filter
+    result = result.filter(item => item.price <= maxPrice);
+
+    // Amenity Filter (Case-insensitive check across strings or arrays)
+    if (selectedAmenity !== "All") {
+      result = result.filter(item => {
+        if (!item.amenities) return false;
+        if (Array.isArray(item.amenities)) {
+          return item.amenities.some(a => a.toLowerCase().includes(selectedAmenity.toLowerCase()));
+        }
+        if (typeof item.amenities === 'string') {
+          return item.amenities.toLowerCase().includes(selectedAmenity.toLowerCase());
+        }
+        return false;
+      });
+    }
+
+    setDisplayListings(result);
+  }, [search, maxPrice, selectedAmenity, rawListings]);
+
+  // 3. Dynamic Real Geocoding for Accurate Leaflet Map Markers
+  useEffect(() => {
+    if (!showMap || displayListings.length === 0) return;
+
+    const geocodeListings = async () => {
+      const coordsArray = [];
+      for (const item of displayListings) {
+        // Checking if listing already has database coordinates
+        if (item.geometry && item.geometry.coordinates && item.geometry.coordinates.length === 2) {
+          coordsArray.push({
+            id: item._id,
+            lat: item.geometry.coordinates[1],
+            lng: item.geometry.coordinates[0],
+            item
+          });
+        } else {
+          // OpenStreetMap Nominatim Geocoding API for exact city coordinates
+          try {
+            const query = encodeURIComponent(`${item.location}, ${item.country || ''}`);
+            const geoRes = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
+            if (geoRes.data && geoRes.data.length > 0) {
+              coordsArray.push({
+                id: item._id,
+                lat: parseFloat(geoRes.data[0].lat),
+                lng: parseFloat(geoRes.data[0].lon),
+                item
+              });
+            }
+          } catch (e) {
+            console.log("Geocoding failed for item:", item.title);
+          }
+        }
+      }
+      setMapCoords(coordsArray);
+    };
+
+    geocodeListings();
+  }, [showMap, displayListings]);
 
   const categories = [
     { name: "Trending", icon: "fa-fire" },
@@ -66,43 +139,45 @@ const Home = () => {
 
   return (
     <div className="container mt-3 mb-5">
-      {/* 🔍 Search Bar & Dynamic Filters Bar */}
+      {/* Search Bar */}
       <div className="row justify-content-center mb-4">
         <div className="col-md-6">
-          <form onSubmit={(e) => { e.preventDefault(); fetchListings(`?location=${search}`); }} className="d-flex shadow-sm rounded-pill border p-1 bg-white">
+          <div className="d-flex shadow-sm rounded-pill border p-1 bg-white">
             <input 
               type="text" 
               className="form-control border-0 rounded-pill px-4" 
-              placeholder="Search destinations (e.g., Goa, Manali)" 
+              placeholder="Search destinations (e.g., Goa, Delhi, Manali)" 
               value={search} 
               onChange={(e) => setSearch(e.target.value)} 
             />
-            <button className="btn btn-danger rounded-circle p-2 px-3 ms-2"><i className="fa-solid fa-magnifying-glass"></i></button>
-          </form>
+            <button className="btn btn-danger rounded-circle p-2 px-3 ms-2">
+              <i className="fa-solid fa-magnifying-glass"></i>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 🎛️ Filter Panel: Price Slider & Amenities */}
+      {/* Filter Panel: Price Slider, Amenity Filter & Map Toggle */}
       <div className="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-light">
         <div className="row align-items-center g-3">
           
           {/* Price Range Slider */}
-          <div className="col-md-5">
+          <div className="col-md-4">
             <label className="form-label fw-bold mb-1 small text-secondary">
               Max Price: <span className="text-danger fw-bold fs-6">₹{Number(maxPrice).toLocaleString()}/night</span>
             </label>
             <input 
               type="range" 
               className="form-range" 
-              min="1000" 
+              min="500" 
               max="50000" 
-              step="1000" 
+              step="500" 
               value={maxPrice} 
               onChange={(e) => setMaxPrice(e.target.value)} 
             />
           </div>
 
-          {/* Amenity Filter */}
+          {/* Amenity Filter Dropdown */}
           <div className="col-md-4">
             <label className="form-label fw-bold mb-1 small text-secondary">Filter by Amenity:</label>
             <select 
@@ -111,23 +186,24 @@ const Home = () => {
               onChange={(e) => setSelectedAmenity(e.target.value)}
             >
               <option value="All">All Amenities 🌟</option>
-              <option value="Wifi">📶 High-Speed Wi-Fi</option>
-              <option value="Pool">🏊 Swimming Pool</option>
-              <option value="AC">❄️ Air Conditioning</option>
-              <option value="Kitchen">🍳 Kitchen Available</option>
+              <option value="wifi">📶 High-Speed Wi-Fi</option>
+              <option value="pool">🏊 Swimming Pool</option>
+              <option value="ac">❄️ Air Conditioning</option>
+              <option value="kitchen">🍳 Kitchen</option>
+              <option value="tv">📺 TV / Cable</option>
             </select>
           </div>
 
-          {/* Map / List View Toggle */}
-          <div className="col-md-3 text-end">
+          {/* Map / List Toggle Button */}
+          <div className="col-md-4 text-end">
             <button 
               className="btn btn-dark rounded-pill px-4 shadow-sm fw-bold w-100"
               onClick={() => setShowMap(!showMap)}
             >
               {showMap ? (
-                <> <i className="fa-solid fa-list me-2"></i>Show List View </>
+                <><i className="fa-solid fa-list me-2"></i>Show List View</>
               ) : (
-                <> <i className="fa-solid fa-map-location-dot me-2 text-danger"></i>Show Interactive Map </>
+                <><i className="fa-solid fa-map-location-dot me-2 text-danger"></i>Show Interactive Map</>
               )}
             </button>
           </div>
@@ -139,7 +215,12 @@ const Home = () => {
       <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
         <div className="d-flex overflow-auto text-center py-2 no-scrollbar gap-4 flex-grow-1">
           {categories.map((cat, index) => (
-            <div key={index} onClick={() => fetchListings(`?category=${cat.name}`)} style={{ opacity: "0.8", cursor: "pointer", minWidth: "80px" }} className="category-icon">
+            <div 
+              key={index} 
+              onClick={() => fetchListings(`?category=${cat.name}`)} 
+              style={{ opacity: "0.8", cursor: "pointer", minWidth: "80px" }} 
+              className="category-icon"
+            >
               <i className={`fa-solid ${cat.icon} fs-4 mb-2 text-danger`}></i>
               <p style={{ fontSize: "12px", fontWeight: "600" }}>{cat.name}</p>
             </div>
@@ -154,7 +235,7 @@ const Home = () => {
         </div>
       </div>
 
-      {/* 🗺️ INTERACTIVE MAP VIEW */}
+      {/* MAP VIEW vs GRID VIEW */}
       {showMap ? (
         <div className="card border-0 shadow-lg rounded-4 overflow-hidden mb-5" style={{ height: '550px' }}>
           <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%' }}>
@@ -162,43 +243,39 @@ const Home = () => {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {filteredListings.map((item) => {
-              // Lat/Lng fallback (India center default coordinates if missing)
-              const lat = item.geometry?.coordinates[1] || 20.5937 + (Math.random() - 0.5) * 5;
-              const lng = item.geometry?.coordinates[0] || 78.9629 + (Math.random() - 0.5) * 5;
-
-              return (
-                <Marker key={item._id} position={[lat, lng]}>
-                  <Popup>
-                    <div style={{ maxWidth: '180px' }}>
-                      <img 
-                        src={item.images && item.images.length > 0 ? item.images[0] : item.image} 
-                        alt={item.title} 
-                        className="rounded-3 mb-2"
-                        style={{ width: '100%', height: '100px', objectFit: 'cover' }}
-                      />
-                      <h6 className="fw-bold mb-1 small">{item.title}</h6>
-                      <p className="text-danger fw-bold mb-1">₹{item.price}/night</p>
-                      <Link to={`/listings/${item._id}`} className="btn btn-sm btn-danger w-100 rounded-pill text-white fw-bold py-1">
-                        View Details
-                      </Link>
-                    </div>
-                  </Popup>
-                </Marker>
-              );
-            })}
+            {mapCoords.length > 0 && <MapBounds coords={mapCoords} />}
+            {mapCoords.map((coord) => (
+              <Marker key={coord.id} position={[coord.lat, coord.lng]}>
+                <Popup>
+                  <div style={{ maxWidth: '180px' }}>
+                    <img 
+                      src={coord.item.images && coord.item.images.length > 0 ? coord.item.images[0] : coord.item.image} 
+                      alt={coord.item.title} 
+                      className="rounded-3 mb-2"
+                      style={{ width: '100%', height: '100px', objectFit: 'cover' }}
+                    />
+                    <h6 className="fw-bold mb-1 small">{coord.item.title}</h6>
+                    <p className="text-muted small mb-1">{coord.item.location}</p>
+                    <p className="text-danger fw-bold mb-2">₹{coord.item.price}/night</p>
+                    <Link to={`/listings/${coord.item._id}`} className="btn btn-sm btn-danger w-100 rounded-pill text-white fw-bold py-1">
+                      View Details
+                    </Link>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
           </MapContainer>
         </div>
       ) : (
-        /* 📋 GRID VIEW */
+        /* GRID VIEW */
         <div className="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
-          {filteredListings.length === 0 ? (
+          {displayListings.length === 0 ? (
             <div className="col-12 text-center py-5">
-              <h5>No stays match your search criteria! 🏨</h5>
-              <p className="text-muted">Try adjusting your price slider or search term.</p>
+              <h5>No stays match your search/filter criteria! 🏨</h5>
+              <p className="text-muted">Try clearing the search or changing the amenity filter.</p>
             </div>
           ) : (
-            filteredListings.map((listing) => (
+            displayListings.map((listing) => (
               <div className="col" key={listing._id}>
                 <Link to={`/listings/${listing._id}`} className="text-decoration-none text-dark">
                   <div className="card h-100 border-0 shadow-sm hover-card rounded-4 overflow-hidden">
