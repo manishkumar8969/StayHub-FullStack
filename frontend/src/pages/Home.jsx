@@ -161,25 +161,25 @@ const Home = () => {
       <div className="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-light">
         <div className="row align-items-center g-3">
           
-          {/* Price Range Slider (🔥 UPDATED COLOR & CONTRAST) */}
-          <div className="col-md-4">
-            <label className="form-label fw-bold mb-2 small text-dark d-flex align-items-center justify-content-between">
-              <span>Max Price / Night:</span>
+          {/* Price Range Slider (FIXED UI CONTRAST & ALIGNMENT) */}
+      <div className="col-md-4">
+            <label className="form-label fw-bold mb-2 small text-dark d-flex align-items-center gap-2">
+           <span>Max Price / Night:</span>
               <span className="badge bg-danger text-white fw-bold fs-6 shadow-sm px-2 py-1">
-                ₹{Number(maxPrice).toLocaleString()}
-              </span>
+              ₹{Number(maxPrice).toLocaleString()}
+             </span>
             </label>
-            <input 
-              type="range" 
-              className="form-range" 
-              style={{ accentColor: "#dc3545", cursor: "pointer" }}
-              min="500" 
-              max="50000" 
-              step="500" 
-              value={maxPrice} 
-              onChange={(e) => setMaxPrice(e.target.value)} 
-            />
-          </div>
+          <input 
+                     type="range" 
+                 className="form-range bg-secondary bg-opacity-25 rounded-pill p-1" 
+               style={{ accentColor: "#dc3545", cursor: "pointer", height: "8px" }}
+                  min="500" 
+                   max="50000" 
+                  step="500" 
+                  value={maxPrice} 
+             onChange={(e) => setMaxPrice(e.target.value)} 
+          />
+     </div>
 
           {/* Amenity Filter Dropdown */}
           <div className="col-md-4">
