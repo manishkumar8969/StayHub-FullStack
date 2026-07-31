@@ -36,18 +36,54 @@ const parseAmenities = (amenitiesData) => {
     return [];
 };
 
+// 🔥 DYNAMIC TRENDING SORTED LISTINGS
 const getAllListings = async (req, res) => {
     try {
         const { location, category, amenity } = req.query;
         let query = {};
 
         if (location) query.location = new RegExp(location, 'i');
-        if (category) query.category = new RegExp(category, 'i');
         if (amenity) query.amenities = new RegExp(amenity, 'i');
+
+        // Agar Trending tab active hai, tabhi Max Bookings Count ke basis par sort karenge
+        if (category && category.toLowerCase() === 'trending') {
+            const listingsWithBookingCount = await Listing.aggregate([
+                { $match: query },
+                {
+                    $lookup: {
+                        from: 'bookings',         // Bookings collection se join
+                        localField: '_id',
+                        foreignField: 'hotelId',  // Matching listing ID
+                        as: 'allBookings'
+                    }
+                },
+                {
+                    $addFields: {
+                        bookingCount: { $size: '$allBookings' } // Total bookings count calculate
+                    }
+                },
+                {
+                    $sort: { 
+                        bookingCount: -1, // Rank 1: Sabse zyada bookings pehle
+                        createdAt: -1     // Tie-breaker: Agar bookings equal hain toh naya stay pehle
+                    }
+                },
+                {
+                    $project: { allBookings: 0 } // Extra response field remove for clean data
+                }
+            ]);
+
+            return res.status(200).json(listingsWithBookingCount);
+        }
+
+        // Baki categories ke liye standard filtering
+        if (category) query.category = new RegExp(category, 'i');
 
         const listings = await Listing.find(query).sort({ createdAt: -1 });
         res.status(200).json(listings);
-    } catch (error) { res.status(500).json({ message: error.message }); }
+    } catch (error) { 
+        res.status(500).json({ message: error.message }); 
+    }
 };
 
 const getListingById = async (req, res) => {
