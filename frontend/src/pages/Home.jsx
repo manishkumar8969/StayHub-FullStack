@@ -161,14 +161,18 @@ const Home = () => {
       <div className="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-light">
         <div className="row align-items-center g-3">
           
-          {/* Price Range Slider */}
+          {/* Price Range Slider (🔥 UPDATED COLOR & CONTRAST) */}
           <div className="col-md-4">
-            <label className="form-label fw-bold mb-1 small text-secondary">
-              Max Price: <span className="text-danger fw-bold fs-6">₹{Number(maxPrice).toLocaleString()}/night</span>
+            <label className="form-label fw-bold mb-2 small text-dark d-flex align-items-center justify-content-between">
+              <span>Max Price / Night:</span>
+              <span className="badge bg-danger text-white fw-bold fs-6 shadow-sm px-2 py-1">
+                ₹{Number(maxPrice).toLocaleString()}
+              </span>
             </label>
             <input 
               type="range" 
               className="form-range" 
+              style={{ accentColor: "#dc3545", cursor: "pointer" }}
               min="500" 
               max="50000" 
               step="500" 
@@ -179,9 +183,9 @@ const Home = () => {
 
           {/* Amenity Filter Dropdown */}
           <div className="col-md-4">
-            <label className="form-label fw-bold mb-1 small text-secondary">Filter by Amenity:</label>
+            <label className="form-label fw-bold mb-1 small text-dark">Filter by Amenity:</label>
             <select 
-              className="form-select rounded-pill border-0 shadow-sm small"
+              className="form-select rounded-pill border-0 shadow-sm small fw-semibold text-dark"
               value={selectedAmenity}
               onChange={(e) => setSelectedAmenity(e.target.value)}
             >
@@ -229,7 +233,7 @@ const Home = () => {
 
         <div className="tax-toggle shadow-sm p-2 rounded-pill bg-white border">
           <div className="form-check form-switch form-check-reverse m-0">
-            <label className="form-check-label fw-bold small me-2" htmlFor="flexSwitchCheckDefault">Display total before taxes</label>
+            <label className="form-check-label fw-bold small me-2 text-dark" htmlFor="flexSwitchCheckDefault">Display total before taxes</label>
             <input className="form-check-input ms-2" type="checkbox" role="switch" id="flexSwitchCheckDefault" onChange={() => setShowTax(!showTax)} />
           </div>
         </div>
