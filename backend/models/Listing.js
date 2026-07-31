@@ -1,3 +1,4 @@
+// backend/models/Listing.js
 const mongoose = require('mongoose');
 
 const listingSchema = new mongoose.Schema({
@@ -11,6 +12,11 @@ const listingSchema = new mongoose.Schema({
     price: { type: Number, required: true },
     location: String,
     country: String,
+    category: { type: String, default: 'Trending' },
+    amenities: {
+        type: [String],
+        default: [] // e.g. ["wifi", "pool", "ac", "kitchen", "tv"]
+    },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reviews: [
         {

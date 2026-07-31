@@ -1,3 +1,4 @@
+// backend/controllers/listingController.js
 const Listing = require('../models/Listing');
 const Booking = require('../models/Booking');
 const cloudinary = require('cloudinary').v2;
@@ -19,12 +20,31 @@ const uploadToCloudinary = (fileBuffer) => {
     });
 };
 
+// Helper: Safety parse amenities coming from frontend form
+const parseAmenities = (amenitiesData) => {
+    if (!amenitiesData) return [];
+    if (Array.isArray(amenitiesData)) return amenitiesData;
+    if (typeof amenitiesData === 'string') {
+        try {
+            const parsed = JSON.parse(amenitiesData);
+            if (Array.isArray(parsed)) return parsed;
+        } catch (e) {
+            return amenitiesData.split(',').map(item => item.trim().toLowerCase());
+        }
+        return [amenitiesData.toLowerCase()];
+    }
+    return [];
+};
+
 const getAllListings = async (req, res) => {
     try {
-        const { location, category } = req.query;
+        const { location, category, amenity } = req.query;
         let query = {};
+
         if (location) query.location = new RegExp(location, 'i');
-        if (category) query.description = new RegExp(category, 'i');
+        if (category) query.category = new RegExp(category, 'i');
+        if (amenity) query.amenities = new RegExp(amenity, 'i');
+
         const listings = await Listing.find(query).sort({ createdAt: -1 });
         res.status(200).json(listings);
     } catch (error) { res.status(500).json({ message: error.message }); }
@@ -45,26 +65,68 @@ const createListing = async (req, res) => {
         const uploadPromises = files.map(file => uploadToCloudinary(file.buffer));
         const uploadedUrls = await Promise.all(uploadPromises);
 
-        const newListing = new Listing({ ...req.body, images: uploadedUrls, owner: req.user.id });
+        // Parse amenities safely
+        const formattedAmenities = parseAmenities(req.body.amenities);
+
+        const newListing = new Listing({ 
+            ...req.body, 
+            amenities: formattedAmenities,
+            images: uploadedUrls, 
+            owner: req.user.id 
+        });
+        
         await newListing.save();
         res.status(201).json(newListing);
     } catch (error) { res.status(400).json({ message: error.message }); }
 };
 
+// 🎯 SAFE UPDATED FUNCTION
 const updateListing = async (req, res) => {
     try {
         const listing = await Listing.findById(req.params.id);
-        if (String(listing.owner) !== String(req.user.id)) return res.status(401).json({ message: 'Not authorized' });
+        if (!listing) return res.status(404).json({ message: 'Listing not found' });
 
-        let finalImages = listing.images;
-        if (req.files && req.files.length > 0) {
-            const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer));
-            finalImages = await Promise.all(uploadPromises);
+        if (String(listing.owner) !== String(req.user.id)) {
+            return res.status(401).json({ message: 'Not authorized' });
         }
 
-        const updated = await Listing.findByIdAndUpdate(req.params.id, { ...req.body, images: finalImages }, { new: true });
+        // 1. Existing text URLs logic (agar frontend se rearrange/edit karke bheja gaya ho)
+        let finalImages = listing.images;
+        if (req.body.existingImages) {
+            try {
+                const parsedExisting = JSON.parse(req.body.existingImages);
+                if (Array.isArray(parsedExisting)) {
+                    finalImages = parsedExisting.filter(url => url && typeof url === 'string' && url.trim() !== "");
+                }
+            } catch (e) {
+                // Ignore parse error, fallback to current images
+            }
+        }
+
+        // 2. Direct device files upload logic (agar nayi photos select ki ho)
+        if (req.files && req.files.length > 0) {
+            const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer));
+            const newUploadedUrls = await Promise.all(uploadPromises);
+            finalImages = [...finalImages, ...newUploadedUrls];
+        }
+
+        // 3. Format Amenities
+        const formattedAmenities = req.body.amenities ? parseAmenities(req.body.amenities) : listing.amenities;
+
+        const updated = await Listing.findByIdAndUpdate(
+            req.params.id, 
+            { 
+                ...req.body, 
+                amenities: formattedAmenities, 
+                images: finalImages 
+            }, 
+            { new: true }
+        );
+
         res.status(200).json(updated);
-    } catch (error) { res.status(400).json({ message: error.message }); }
+    } catch (error) { 
+        res.status(400).json({ message: error.message }); 
+    }
 };
 
 const deleteListing = async (req, res) => {
