@@ -80,16 +80,16 @@ const ListingDetail = () => {
             );
 
             if (!orderRes.data.success) {
-                alert("Failed to initiate Razorpay payment order!");
+                alert("Failed to initiate Razorpay payment order! Check API Keys.");
                 setPaymentLoading(false);
                 return;
             }
 
-            const { order } = orderRes.data;
+            const { order, key } = orderRes.data;
 
             // 3. Open Razorpay Checkout Popup Options
             const options = {
-                key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_key", // Fallback to test key
+                key: key || process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_TL0826zhtIxXW7", 
                 amount: order.amount,
                 currency: order.currency,
                 name: "StayHub Bookings",
@@ -131,9 +131,15 @@ const ListingDetail = () => {
                         setPaymentLoading(false);
                     }
                 },
+                modal: {
+                    ondismiss: function () {
+                        // User closed popup -> Reset button status
+                        setPaymentLoading(false);
+                    }
+                },
                 prefill: {
-                    name: user.username || "Guest User",
-                    email: user.email || "guest@stayhub.com",
+                    name: user?.username || "Guest User",
+                    email: user?.email || "guest@stayhub.com",
                     contact: "9999999999"
                 },
                 theme: {

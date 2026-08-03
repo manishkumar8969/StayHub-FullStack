@@ -12,10 +12,10 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Initialize Razorpay Instance
+// Safe Razorpay Instance Initialization
 const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET
+    key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_TL0826zhtIxXW7',
+    key_secret: process.env.RAZORPAY_KEY_SECRET || 'IzXiBTojT4R6btYIGWha1qXm'
 });
 
 const uploadToCloudinary = (fileBuffer) => {
@@ -205,7 +205,7 @@ const getUserBookings = async (req, res) => {
     } catch (error) { res.status(500).json({ message: error.message }); }
 };
 
-// 💳 NEW: Create Razorpay Order
+// 💳 CREATE RAZORPAY ORDER (Passes Key ID dynamically to Frontend)
 const createRazorpayOrder = async (req, res) => {
     try {
         const { amount } = req.body; // Amount in INR
@@ -216,13 +216,19 @@ const createRazorpayOrder = async (req, res) => {
         };
 
         const order = await razorpay.orders.create(options);
-        res.status(200).json({ success: true, order });
+        
+        // Pass order details AND active Key ID for Popup
+        res.status(200).json({ 
+            success: true, 
+            order,
+            key: process.env.RAZORPAY_KEY_ID || 'rzp_test_TL0826zhtIxXW7'
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 💳 NEW: Verify Razorpay Payment and Save Booking
+// 💳 VERIFY RAZORPAY PAYMENT & SAVE BOOKING
 const verifyRazorpayPayment = async (req, res) => {
     try {
         const { 
@@ -233,13 +239,14 @@ const verifyRazorpayPayment = async (req, res) => {
         } = req.body;
 
         const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const secretKey = process.env.RAZORPAY_KEY_SECRET || 'IzXiBTojT4R6btYIGWha1qXm';
+        
         const expectedSignature = crypto
-            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+            .createHmac("sha256", secretKey)
             .update(body.toString())
             .digest("hex");
 
         if (expectedSignature === razorpay_signature) {
-            // Payment verified -> Save booking to DB
             const newBooking = await Booking.create({
                 ...bookingData,
                 listing: req.params.id,
