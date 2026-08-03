@@ -1,7 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { getAllListings, getListingById, createListing, updateListing, deleteListing, addReview, bookListing, getUserBookings } = require('../controllers/listingController');
+const { 
+    getAllListings, 
+    getListingById, 
+    createListing, 
+    updateListing, 
+    deleteListing, 
+    addReview, 
+    bookListing, 
+    getUserBookings,
+    createRazorpayOrder,
+    verifyRazorpayPayment
+} = require('../controllers/listingController');
 const { protect } = require('../middleware/auth');
 
 const storage = multer.memoryStorage();
@@ -18,5 +29,9 @@ router.put('/:id', protect, upload.array('images', 5), updateListing);
 router.delete('/:id', protect, deleteListing);
 router.post('/:id/reviews', protect, addReview);
 router.post('/:id/book', protect, bookListing);
+
+// 💳 RAZORPAY PAYMENT ROUTES
+router.post('/razorpay/order', protect, createRazorpayOrder);
+router.post('/:id/razorpay/verify', protect, verifyRazorpayPayment);
 
 module.exports = router;

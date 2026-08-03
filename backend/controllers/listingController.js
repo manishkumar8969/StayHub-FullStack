@@ -3,11 +3,19 @@ const Listing = require('../models/Listing');
 const Booking = require('../models/Booking');
 const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Initialize Razorpay Instance
+const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
 const uploadToCloudinary = (fileBuffer) => {
@@ -197,4 +205,72 @@ const getUserBookings = async (req, res) => {
     } catch (error) { res.status(500).json({ message: error.message }); }
 };
 
-module.exports = { getAllListings, getListingById, createListing, updateListing, deleteListing, addReview, bookListing, getUserBookings };
+// 💳 NEW: Create Razorpay Order
+const createRazorpayOrder = async (req, res) => {
+    try {
+        const { amount } = req.body; // Amount in INR
+        const options = {
+            amount: Number(amount) * 100, // Convert to paise
+            currency: "INR",
+            receipt: `receipt_${Date.now()}`
+        };
+
+        const order = await razorpay.orders.create(options);
+        res.status(200).json({ success: true, order });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 💳 NEW: Verify Razorpay Payment and Save Booking
+const verifyRazorpayPayment = async (req, res) => {
+    try {
+        const { 
+            razorpay_order_id, 
+            razorpay_payment_id, 
+            razorpay_signature,
+            bookingData 
+        } = req.body;
+
+        const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const expectedSignature = crypto
+            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+            .update(body.toString())
+            .digest("hex");
+
+        if (expectedSignature === razorpay_signature) {
+            // Payment verified -> Save booking to DB
+            const newBooking = await Booking.create({
+                ...bookingData,
+                listing: req.params.id,
+                user: req.user.id,
+                paymentStatus: "Paid",
+                paymentId: razorpay_payment_id,
+                orderId: razorpay_order_id
+            });
+
+            return res.status(201).json({ 
+                success: true, 
+                message: "Payment verified and booking confirmed!", 
+                booking: newBooking 
+            });
+        } else {
+            return res.status(400).json({ success: false, message: "Invalid payment signature!" });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+module.exports = { 
+    getAllListings, 
+    getListingById, 
+    createListing, 
+    updateListing, 
+    deleteListing, 
+    addReview, 
+    bookListing, 
+    getUserBookings,
+    createRazorpayOrder,
+    verifyRazorpayPayment
+};

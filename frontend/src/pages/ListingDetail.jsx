@@ -2,11 +2,23 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 
+// Helper function to dynamically load Razorpay Checkout Script
+const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+    });
+};
+
 const ListingDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [listing, setListing] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [paymentLoading, setPaymentLoading] = useState(false);
     const [selectedImg, setSelectedImg] = useState(null); 
 
     const [checkIn, setCheckIn] = useState("");
@@ -37,7 +49,7 @@ const ListingDetail = () => {
         String(user.id || user._id) === String(listing.owner?._id || listing.owner)
     );
 
-    // ✅ UPDATED: Dynamic Inventory-based Room Booking Logic
+    // 💳 RAZORPAY INTEGRATED BOOKING & PAYMENT FLOW
     const handleBooking = async () => {
         const token = localStorage.getItem('token');
         if (!token) return alert("Please login to book!");
@@ -46,29 +58,101 @@ const ListingDetail = () => {
         const nights = (new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24);
         if (nights <= 0) return alert("Check-out date must be after check-in!");
 
-        try {
-            const userId = user.id || user._id;
-            const totalPrice = nights * listing.price;
+        const totalPrice = nights * listing.price;
+        const userId = user.id || user._id;
 
-            // Updated endpoint calling our new Booking Router
-            await axios.post(`/api/bookings/create`, 
-                { 
-                    hotelId: id,
-                    roomId: id, // Mapping listing ID to roomId for seamless compatibility
-                    userId: userId,
-                    checkInDate: checkIn,
-                    checkOutDate: checkOut,
-                    totalPrice: totalPrice,
-                    guests: []
-                },
+        setPaymentLoading(true);
+
+        try {
+            // 1. Load Razorpay Script
+            const isScriptLoaded = await loadRazorpayScript();
+            if (!isScriptLoaded) {
+                alert("Razorpay SDK failed to load. Please check your internet connection.");
+                setPaymentLoading(false);
+                return;
+            }
+
+            // 2. Create Razorpay Order via Backend
+            const orderRes = await axios.post(
+                `${API_BASE_URL}/razorpay/order`,
+                { amount: totalPrice },
                 { headers: { 'Authorization': token } }
             );
 
-            alert("Booking Successful! 🎉 Room reserved in inventory.");
-            navigate('/my-bookings');
+            if (!orderRes.data.success) {
+                alert("Failed to initiate Razorpay payment order!");
+                setPaymentLoading(false);
+                return;
+            }
+
+            const { order } = orderRes.data;
+
+            // 3. Open Razorpay Checkout Popup Options
+            const options = {
+                key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_key", // Fallback to test key
+                amount: order.amount,
+                currency: order.currency,
+                name: "StayHub Bookings",
+                description: `Booking for ${listing.title}`,
+                image: galleryImages[0],
+                order_id: order.id,
+                handler: async function (response) {
+                    try {
+                        // 4. Verify Payment with Backend and Create Booking
+                        const verifyRes = await axios.post(
+                            `${API_BASE_URL}/${id}/razorpay/verify`,
+                            {
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature,
+                                bookingData: {
+                                    hotelId: id,
+                                    roomId: id,
+                                    userId: userId,
+                                    checkInDate: checkIn,
+                                    checkOutDate: checkOut,
+                                    totalPrice: totalPrice,
+                                    guests: []
+                                }
+                            },
+                            { headers: { 'Authorization': token } }
+                        );
+
+                        if (verifyRes.data.success) {
+                            alert("Payment Successful & Booking Confirmed! 🎉");
+                            navigate('/my-bookings');
+                        } else {
+                            alert("Payment Verification Failed!");
+                        }
+                    } catch (err) {
+                        console.error("Verification error:", err);
+                        alert("Payment verification error occurred!");
+                    } finally {
+                        setPaymentLoading(false);
+                    }
+                },
+                prefill: {
+                    name: user.username || "Guest User",
+                    email: user.email || "guest@stayhub.com",
+                    contact: "9999999999"
+                },
+                theme: {
+                    color: "#dc3545" // StayHub Red Theme
+                }
+            };
+
+            const paymentObject = new window.Razorpay(options);
+            paymentObject.on('payment.failed', function (response) {
+                alert(`Payment Failed: ${response.error.description}`);
+                setPaymentLoading(false);
+            });
+            paymentObject.open();
+
         } catch (err) { 
-            const errorMsg = err.response?.data?.message || "Booking failed! Room might be fully booked.";
+            console.error("Booking Payment Error:", err);
+            const errorMsg = err.response?.data?.message || "Booking / Payment process failed.";
             alert(errorMsg); 
+            setPaymentLoading(false);
         }
     };
 
@@ -199,7 +283,13 @@ const ListingDetail = () => {
                             <div className="p-2 border-bottom"><label className="small fw-bold">CHECK-IN</label><input type="date" className="form-control border-0" onChange={(e)=>setCheckIn(e.target.value)} /></div>
                             <div className="p-2"><label className="small fw-bold">CHECK-OUT</label><input type="date" className="form-control border-0" onChange={(e)=>setCheckOut(e.target.value)} /></div>
                         </div>
-                        <button className="btn btn-danger w-100 mt-3 py-2 fw-bold fs-5 rounded-pill" onClick={handleBooking}>Reserve</button>
+                        <button 
+                            className="btn btn-danger w-100 mt-3 py-2 fw-bold fs-5 rounded-pill shadow-sm" 
+                            onClick={handleBooking}
+                            disabled={paymentLoading}
+                        >
+                            {paymentLoading ? "Processing Payment..." : "Pay & Reserve 💳"}
+                        </button>
                     </div>
                 </div>
             </div>
