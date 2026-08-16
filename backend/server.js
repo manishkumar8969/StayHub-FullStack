@@ -21,12 +21,14 @@ app.use(express.json());
 // Routes Imports
 const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
-const bookingRoutes = require('./routes/bookingRoutes'); // 👈 Naya Booking Route import hua
+const bookingRoutes = require('./routes/bookingRoutes');
+const aiRoutes = require('./routes/aiRoutes'); // 👈 Naya AI Route import hua
 
 // API Routes Setup
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
-app.use('/api/bookings', bookingRoutes); // 👈 Naya Booking Route Endpoint connect hua
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/ai', aiRoutes); // 👈 Naya AI Assistant Endpoint connect hua
 
 const PORT = process.env.PORT || 5000;
 
