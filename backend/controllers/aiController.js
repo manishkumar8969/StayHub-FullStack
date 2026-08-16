@@ -17,7 +17,7 @@ const handleAIChat = async (req, res) => {
 
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // Active listings context safely fetch karna
+        // Database context
         let listingsContext = "";
         try {
             const listings = await Listing.find({}, "title location country price amenities").limit(15);
@@ -28,26 +28,40 @@ const handleAIChat = async (req, res) => {
             console.error("Listing fetch context error:", dbErr.message);
         }
 
-        const systemInstruction = `You are StayHub AI, a helpful travel concierge for the StayHub booking platform.
+        const prompt = `You are StayHub AI, a friendly travel concierge for the StayHub booking platform.
 Available catalog stays:
 ${listingsContext || "Multiple vacation stays across India."}
 
+User says: "${message}"
+
 Respond politely, concisely, and suggest stays from the catalog if relevant.`;
 
-        // Standard 1.5 Flash model
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
-            systemInstruction: systemInstruction
-        });
+        // Model list with automatic fallback
+        const modelNames = ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-2.0-flash", "gemini-pro"];
+        let responseText = null;
+        let lastError = null;
 
-        const result = await model.generateContent(message);
-        const responseText = result.response.text();
+        for (const modelName of modelNames) {
+            try {
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent(prompt);
+                responseText = result.response.text();
+                if (responseText) break;
+            } catch (err) {
+                lastError = err;
+            }
+        }
 
-        return res.status(200).json({ reply: responseText });
+        if (responseText) {
+            return res.status(200).json({ reply: responseText });
+        }
+
+        throw lastError || new Error("Failed to generate response across models");
+
     } catch (error) {
-        console.error("Gemini API Full Error:", error);
+        console.error("Gemini API Error:", error);
         return res.status(200).json({ 
-            reply: `AI connection error: ${error.message || "Please check API key permissions"}` 
+            reply: "Namaste! I am currently unable to generate a response. Please try again shortly." 
         });
     }
 };
