@@ -11,16 +11,16 @@ const handleAIChat = async (req, res) => {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return res.status(200).json({
-                reply: "AI is currently in setup mode. Please ensure GEMINI_API_KEY is configured in the environment variables!"
+                reply: "GEMINI_API_KEY is not defined in environment variables!"
             });
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // Database context
+        // Fetch sample catalog
         let listingsContext = "";
         try {
-            const listings = await Listing.find({}, "title location country price amenities").limit(15);
+            const listings = await Listing.find({}, "title location country price amenities").limit(10);
             listingsContext = listings.map(l => 
                 `- ${l.title} in ${l.location}, ${l.country} (₹${l.price}/night)`
             ).join("\n");
@@ -28,40 +28,24 @@ const handleAIChat = async (req, res) => {
             console.error("Listing fetch context error:", dbErr.message);
         }
 
-        const prompt = `You are StayHub AI, a friendly travel concierge for the StayHub booking platform.
-Available catalog stays:
-${listingsContext || "Multiple vacation stays across India."}
+        const prompt = `You are StayHub AI, a travel concierge.
+Catalog stays:
+${listingsContext || "Standard stays available."}
 
-User says: "${message}"
+User: ${message}
 
-Respond politely, concisely, and suggest stays from the catalog if relevant.`;
+Provide a short, helpful response in English or Hindi.`;
 
-        // Model list with automatic fallback
-        const modelNames = ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-2.0-flash", "gemini-pro"];
-        let responseText = null;
-        let lastError = null;
+        // Direct call to Gemini 2.5 Flash / 1.5 Flash
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
 
-        for (const modelName of modelNames) {
-            try {
-                const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await model.generateContent(prompt);
-                responseText = result.response.text();
-                if (responseText) break;
-            } catch (err) {
-                lastError = err;
-            }
-        }
-
-        if (responseText) {
-            return res.status(200).json({ reply: responseText });
-        }
-
-        throw lastError || new Error("Failed to generate response across models");
-
+        return res.status(200).json({ reply: responseText });
     } catch (error) {
-        console.error("Gemini API Error:", error);
+        console.error("Gemini Execution Error:", error);
         return res.status(200).json({ 
-            reply: "Namaste! I am currently unable to generate a response. Please try again shortly." 
+            reply: `Gemini Error: ${error.message || "Unknown error occurred"}` 
         });
     }
 };
