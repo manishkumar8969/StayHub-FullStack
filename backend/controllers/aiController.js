@@ -1,5 +1,9 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 const Listing = require("../models/Listing");
+
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+});
 
 const handleAIChat = async (req, res) => {
     try {
@@ -8,16 +12,13 @@ const handleAIChat = async (req, res) => {
             return res.status(400).json({ error: "Message is required" });
         }
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
+        if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
             return res.status(200).json({
                 reply: "GEMINI_API_KEY is not configured in environment variables!"
             });
         }
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-
-        // 1. Fetch catalog stays context
+        // 1. Database se active listings context lena
         let listingsContext = "";
         try {
             const listings = await Listing.find({}, "title location country price amenities").limit(10);
@@ -25,64 +26,31 @@ const handleAIChat = async (req, res) => {
                 `- ${l.title} in ${l.location}, ${l.country} (₹${l.price}/night)`
             ).join("\n");
         } catch (dbErr) {
-            console.error("Listing fetch context error:", dbErr.message);
+            console.error("Listing context error:", dbErr.message);
         }
 
-        const prompt = `You are StayHub AI, a friendly travel concierge for the StayHub booking platform.
+        const inputPrompt = `You are StayHub AI, a helpful travel concierge for the StayHub booking platform.
 Available catalog stays:
 ${listingsContext || "Standard stays available across India."}
 
 User Question: ${message}
 
 Instructions:
-1. Provide a concise, helpful, and warm reply (2-4 sentences).
+1. Provide a concise, warm, and helpful answer (2-4 sentences).
 2. Recommend stays from the catalog if relevant.`;
 
-        // 2. Priority model list
-        const priorityModels = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash-lite"];
-        let responseText = null;
-        let lastError = null;
+        // 2. Call Interactions API using the new official SDK
+        const interaction = await ai.interactions.create({
+            model: "gemini-3.6-flash",
+            input: inputPrompt,
+        });
 
-        for (const modelName of priorityModels) {
-            try {
-                const model = genAI.getGenerativeModel({ model: modelName });
-                const result = await model.generateContent(prompt);
-                responseText = result.response.text();
-                if (responseText) break;
-            } catch (err) {
-                lastError = err;
-            }
-        }
+        const replyText = interaction.output_text || "Namaste! How can I help you with StayHub today?";
 
-        // 3. Fallback: Dynamically query Google for available models if priority models fail
-        if (!responseText) {
-            try {
-                const modelsResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-                const data = await modelsResp.json();
-                
-                const validModel = data.models?.find(m => 
-                    m.supportedGenerationMethods?.includes("generateContent")
-                );
-
-                if (validModel) {
-                    const fallbackModelName = validModel.name.replace("models/", "");
-                    const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName });
-                    const result = await fallbackModel.generateContent(prompt);
-                    responseText = result.response.text();
-                }
-            } catch (fetchErr) {
-                console.error("Auto-discovery error:", fetchErr);
-            }
-        }
-
-        if (responseText) {
-            return res.status(200).json({ reply: responseText });
-        }
-
-        throw lastError || new Error("Unable to connect to any Gemini model");
+        return res.status(200).json({ reply: replyText });
 
     } catch (error) {
-        console.error("Gemini Final Error:", error);
+        console.error("Gemini Interactions API Error:", error);
         return res.status(200).json({ 
             reply: `AI Error: ${error.message || "Failed to generate response"}` 
         });
