@@ -1,4 +1,3 @@
-// backend/routes/bookingRoutes.js
 const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
@@ -15,12 +14,10 @@ router.post('/create', async (req, res) => {
             return res.status(400).json({ message: "Missing required booking details." });
         }
 
-        // Dates ko parse karein
         let start = new Date(checkInDate);
         let end = new Date(checkOutDate);
 
-        // Dates loop run karne se pehle Total Capacity Fallback set karein
-        let totalRoomCount = 5; // Default 5 rooms per property if Room collection is empty
+        let totalRoomCount = 5;
         try {
             const roomData = await Room.findById(roomId);
             if (roomData && roomData.totalCount) {
@@ -80,10 +77,54 @@ router.post('/create', async (req, res) => {
 router.get('/user/:userId', async (req, res) => {
     try {
         const bookings = await Booking.find({ userId: req.params.userId })
-            .populate('hotelId', 'title location image images price');
+            .populate('hotelId', 'title location country image images price')
+            .sort({ createdAt: -1 });
         res.status(200).json(bookings);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching bookings', error: error.message });
+    }
+});
+
+// 3. Booking Cancellation & Inventory Release Route
+router.put('/cancel/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const booking = await Booking.findById(id);
+
+        if (!booking) {
+            return res.status(404).json({ message: "Booking not found" });
+        }
+
+        if (booking.status === 'Cancelled') {
+            return res.status(400).json({ message: "Booking is already cancelled" });
+        }
+
+        booking.status = 'Cancelled';
+        await booking.save();
+
+        // Inventory release: booked dates par bookedCount decrement karein
+        if (booking.roomId && booking.checkInDate && booking.checkOutDate) {
+            let start = new Date(booking.checkInDate);
+            let end = new Date(booking.checkOutDate);
+
+            for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+                const dateStr = d.toISOString().split('T')[0];
+
+                await Inventory.findOneAndUpdate(
+                    { roomId: booking.roomId, date: dateStr, bookedCount: { $gt: 0 } },
+                    { $inc: { bookedCount: -1 } }
+                );
+            }
+        }
+
+        res.status(200).json({ 
+            message: 'Booking cancelled and dates released successfully!', 
+            booking 
+        });
+
+    } catch (error) {
+        console.error("Cancel Booking Error:", error);
+        res.status(500).json({ message: 'Error cancelling booking', error: error.message });
     }
 });
 
