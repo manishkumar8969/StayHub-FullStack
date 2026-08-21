@@ -1,0 +1,15 @@
+name: StayHub 24/7 Keep Alive
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping StayHub Render Server
+        run: |
+          curl -s "https://stayhub-56pz.onrender.com/api/ping" > /dev/null
+          echo "Pinged StayHub successfully!"
