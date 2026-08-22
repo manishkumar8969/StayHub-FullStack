@@ -4,6 +4,8 @@ const Booking = require('../models/Booking');
 const Inventory = require('../models/Inventory');
 const Room = require('../models/Room');
 const Listing = require('../models/Listing');
+const User = require('../models/User'); // 👈 User import for email address
+const { sendBookingConfirmationEmail } = require('../utils/invoiceService'); // 👈 Invoice & Email service
 
 // 1. Nayi Booking Create Karne Ka Safe Route
 router.post('/create', async (req, res) => {
@@ -63,6 +65,17 @@ router.post('/create', async (req, res) => {
                 },
                 { upsert: true, new: true }
             );
+        }
+
+        // ✉️ Trigger Automated PDF Invoice Email (Async - Non Blocking)
+        try {
+            const guestUser = await User.findById(userId);
+            const stayListing = await Listing.findById(hotelId);
+            if (guestUser && guestUser.email) {
+                sendBookingConfirmationEmail(newBooking, guestUser, stayListing || {});
+            }
+        } catch (mailErr) {
+            console.error("Mail trigger error:", mailErr.message);
         }
 
         res.status(201).json({ message: 'Booking successful!', booking: newBooking });
