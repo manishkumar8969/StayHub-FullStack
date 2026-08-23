@@ -7,7 +7,7 @@ const Listing = require('../models/Listing');
 const User = require('../models/User'); 
 const { sendBookingConfirmationEmail } = require('../utils/invoiceService'); 
 
-// 🧪 0. Instant Test Email Route (Check if Gmail Credentials & Nodemailer are working)
+// 🧪 Direct Test Email Route
 router.get('/test-email', async (req, res) => {
     try {
         const testUser = { 
@@ -27,18 +27,18 @@ router.get('/test-email', async (req, res) => {
             country: "India" 
         };
 
-        console.log(`[Test Email] Sending test email to: ${process.env.EMAIL_USER}`);
+        console.log(`[Test Email] Triggering mail to: ${process.env.EMAIL_USER}`);
         await sendBookingConfirmationEmail(testBooking, testUser, testListing);
 
         res.status(200).send(`
-            <div style="font-family: Arial; padding: 20px; text-align: center;">
-                <h2 style="color: #28a745;">✅ Test Email Triggered Successfully!</h2>
-                <p>An invoice email was dispatched to: <b>${process.env.EMAIL_USER}</b></p>
+            <div style="font-family: Arial; padding: 30px; text-align: center;">
+                <h2 style="color: #28a745;">✅ Test Email Dispatched!</h2>
+                <p>Invoice email sent to: <b>${process.env.EMAIL_USER}</b></p>
                 <p>Please check your Gmail <b>Inbox</b> and <b>Spam folder</b>.</p>
             </div>
         `);
     } catch (err) {
-        console.error("[Test Email Error]:", err);
+        console.error("[Test Email Route Error]:", err);
         res.status(500).send(`<h3>Failed to send test email: ${err.message}</h3>`);
     }
 });
@@ -103,7 +103,7 @@ router.post('/create', async (req, res) => {
             );
         }
 
-        // ✉️ Trigger Automated PDF Invoice Email (Async - Non Blocking)
+        // ✉️ Trigger Automated PDF Invoice Email
         try {
             const guestUser = await User.findById(userId);
             const stayListing = await Listing.findById(hotelId);
@@ -151,7 +151,6 @@ router.put('/cancel/:id', async (req, res) => {
         booking.status = 'Cancelled';
         await booking.save();
 
-        // Inventory release: booked dates par bookedCount decrement karein
         if (booking.roomId && booking.checkInDate && booking.checkOutDate) {
             let start = new Date(booking.checkInDate);
             let end = new Date(booking.checkOutDate);
