@@ -7,7 +7,7 @@ const Listing = require('../models/Listing');
 const User = require('../models/User'); 
 const { sendBookingConfirmationEmail } = require('../utils/invoiceService'); 
 
-// 🧪 Direct Test Email Route
+// 🧪 0. Instant Test Email Route
 router.get('/test-email', async (req, res) => {
     try {
         const testUser = { 
@@ -27,7 +27,7 @@ router.get('/test-email', async (req, res) => {
             country: "India" 
         };
 
-        console.log(`[Test Email] Triggering mail to: ${process.env.EMAIL_USER}`);
+        console.log(`[Test Email] Dispatching test email to: ${process.env.EMAIL_USER}`);
         await sendBookingConfirmationEmail(testBooking, testUser, testListing);
 
         res.status(200).send(`
@@ -38,17 +38,19 @@ router.get('/test-email', async (req, res) => {
             </div>
         `);
     } catch (err) {
-        console.error("[Test Email Route Error]:", err);
+        console.error("[Test Email Error]:", err);
         res.status(500).send(`<h3>Failed to send test email: ${err.message}</h3>`);
     }
 });
 
-// 1. Nayi Booking Create Karne Ka Safe Route
+// 1. Nayi Booking Create Route (With Full User Email Resolution)
 router.post('/create', async (req, res) => {
     try {
-        const { hotelId, roomId, userId, checkInDate, checkOutDate, totalPrice, guests } = req.body;
+        const { hotelId, roomId, userId, checkInDate, checkOutDate, totalPrice, guests, email, userEmail } = req.body;
 
-        if (!hotelId || !userId || !checkInDate || !checkOutDate) {
+        console.log("[Booking Received]:", { hotelId, userId, checkInDate, checkOutDate, totalPrice });
+
+        if (!hotelId || !checkInDate || !checkOutDate) {
             return res.status(400).json({ message: "Missing required booking details." });
         }
 
@@ -65,7 +67,7 @@ router.post('/create', async (req, res) => {
             console.log("Using default room capacity logic.");
         }
 
-        // Check Inventory availability for dates
+        // Check Inventory availability
         for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
             const dateStr = d.toISOString().split('T')[0];
 
@@ -75,11 +77,11 @@ router.post('/create', async (req, res) => {
             }
         }
 
-        // Save New Booking Document
+        // Save Booking Document
         const newBooking = new Booking({
             hotelId,
             roomId,
-            userId,
+            userId: userId || req.body.id || req.body._id,
             checkInDate: start,
             checkOutDate: end,
             totalPrice: totalPrice || 0,
@@ -103,39 +105,53 @@ router.post('/create', async (req, res) => {
             );
         }
 
-       // ✉️ Trigger Automated PDF Invoice Email (Async - Non Blocking)
-        try {
-            let guestUser = null;
-            if (userId) {
-                guestUser = await User.findById(userId);
-            }
-            
-            // Agar User model se na mile toh request body ya guests list se email uthao
-            if (!guestUser && guests && guests.length > 0 && guests[0].email) {
-                guestUser = { email: guests[0].email, name: guests[0].name || 'Guest' };
-            }
+        // ✉️ Dynamic Email Resolution & Trigger
+        (async () => {
+            try {
+                const targetUserId = userId || req.body.id || req.body._id;
+                let guestUser = null;
 
-            const stayListing = await Listing.findById(hotelId);
-            
-            if (guestUser && guestUser.email) {
-                console.log(`[Invoice] Initiating email for: ${guestUser.email}`);
-                sendBookingConfirmationEmail(newBooking, guestUser, stayListing || {});
-            } else {
-                console.log('[Invoice Warning] User email not found for booking notification.');
+                if (targetUserId) {
+                    guestUser = await User.findById(targetUserId);
+                }
+
+                // Fallback email checks
+                const resolvedEmail = guestUser?.email 
+                    || email 
+                    || userEmail 
+                    || (guests && guests[0]?.email);
+
+                const resolvedName = guestUser?.username 
+                    || guestUser?.name 
+                    || (guests && guests[0]?.name) 
+                    || 'Valued Guest';
+
+                const stayListing = await Listing.findById(hotelId);
+
+                if (resolvedEmail) {
+                    console.log(`[Invoice] Sending confirmation PDF to: ${resolvedEmail}`);
+                    await sendBookingConfirmationEmail(
+                        newBooking, 
+                        { email: resolvedEmail, name: resolvedName, username: resolvedName }, 
+                        stayListing || {}
+                    );
+                } else {
+                    console.warn('[Invoice] No email found in User DB, Request body or Guests.');
+                }
+            } catch (mailErr) {
+                console.error("[Invoice Dispatch Error]:", mailErr.message);
             }
-        } catch (mailErr) {
-            console.error("Mail trigger error:", mailErr.message);
-        }
+        })();
 
         res.status(201).json({ message: 'Booking successful!', booking: newBooking });
 
     } catch (error) {
-        console.error("Booking Error:", error);
+        console.error("[Booking Error]:", error);
         res.status(500).json({ message: 'Server error during booking', error: error.message });
     }
 });
 
-// 2. User Ki Saari Bookings Fetch Karne Ka Route
+// 2. User Ki Saari Bookings Fetch Route
 router.get('/user/:userId', async (req, res) => {
     try {
         const bookings = await Booking.find({ userId: req.params.userId })
@@ -147,7 +163,7 @@ router.get('/user/:userId', async (req, res) => {
     }
 });
 
-// 3. Booking Cancellation & Inventory Release Route
+// 3. Booking Cancellation Route
 router.put('/cancel/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -184,7 +200,7 @@ router.put('/cancel/:id', async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Cancel Booking Error:", error);
+        console.error("[Cancel Booking Error]:", error);
         res.status(500).json({ message: 'Error cancelling booking', error: error.message });
     }
 });
