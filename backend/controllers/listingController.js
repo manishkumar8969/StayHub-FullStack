@@ -1,6 +1,8 @@
 // backend/controllers/listingController.js
 const Listing = require('../models/Listing');
 const Booking = require('../models/Booking');
+const User = require('../models/User'); // 👈 User model import
+const { sendBookingConfirmationEmail } = require('../utils/invoiceService'); // 👈 Invoice service import
 const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
 const Razorpay = require('razorpay');
@@ -53,38 +55,36 @@ const getAllListings = async (req, res) => {
         if (location) query.location = new RegExp(location, 'i');
         if (amenity) query.amenities = new RegExp(amenity, 'i');
 
-        // Agar Trending tab active hai, tabhi Max Bookings Count ke basis par sort karenge
         if (category && category.toLowerCase() === 'trending') {
             const listingsWithBookingCount = await Listing.aggregate([
                 { $match: query },
                 {
                     $lookup: {
-                        from: 'bookings',         // Bookings collection se join
+                        from: 'bookings',
                         localField: '_id',
-                        foreignField: 'hotelId',  // Matching listing ID
+                        foreignField: 'hotelId',
                         as: 'allBookings'
                     }
                 },
                 {
                     $addFields: {
-                        bookingCount: { $size: '$allBookings' } // Total bookings count calculate
+                        bookingCount: { $size: '$allBookings' }
                     }
                 },
                 {
                     $sort: { 
-                        bookingCount: -1, // Rank 1: Sabse zyada bookings pehle
-                        createdAt: -1     // Tie-breaker: Agar bookings equal hain toh naya stay pehle
+                        bookingCount: -1,
+                        createdAt: -1
                     }
                 },
                 {
-                    $project: { allBookings: 0 } // Extra response field remove for clean data
+                    $project: { allBookings: 0 }
                 }
             ]);
 
             return res.status(200).json(listingsWithBookingCount);
         }
 
-        // Baki categories ke liye standard filtering
         if (category) query.category = new RegExp(category, 'i');
 
         const listings = await Listing.find(query).sort({ createdAt: -1 });
@@ -109,7 +109,6 @@ const createListing = async (req, res) => {
         const uploadPromises = files.map(file => uploadToCloudinary(file.buffer));
         const uploadedUrls = await Promise.all(uploadPromises);
 
-        // Parse amenities safely
         const formattedAmenities = parseAmenities(req.body.amenities);
 
         const newListing = new Listing({ 
@@ -124,7 +123,6 @@ const createListing = async (req, res) => {
     } catch (error) { res.status(400).json({ message: error.message }); }
 };
 
-// 🎯 SAFE UPDATED FUNCTION
 const updateListing = async (req, res) => {
     try {
         const listing = await Listing.findById(req.params.id);
@@ -134,7 +132,6 @@ const updateListing = async (req, res) => {
             return res.status(401).json({ message: 'Not authorized' });
         }
 
-        // 1. Existing text URLs logic (agar frontend se rearrange/edit karke bheja gaya ho)
         let finalImages = listing.images;
         if (req.body.existingImages) {
             try {
@@ -143,18 +140,16 @@ const updateListing = async (req, res) => {
                     finalImages = parsedExisting.filter(url => url && typeof url === 'string' && url.trim() !== "");
                 }
             } catch (e) {
-                // Ignore parse error, fallback to current images
+                // fallback to current images
             }
         }
 
-        // 2. Direct device files upload logic (agar nayi photos select ki ho)
         if (req.files && req.files.length > 0) {
             const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer));
             const newUploadedUrls = await Promise.all(uploadPromises);
             finalImages = [...finalImages, ...newUploadedUrls];
         }
 
-        // 3. Format Amenities
         const formattedAmenities = req.body.amenities ? parseAmenities(req.body.amenities) : listing.amenities;
 
         const updated = await Listing.findByIdAndUpdate(
@@ -205,19 +200,18 @@ const getUserBookings = async (req, res) => {
     } catch (error) { res.status(500).json({ message: error.message }); }
 };
 
-// 💳 CREATE RAZORPAY ORDER (Passes Key ID dynamically to Frontend)
+// 💳 CREATE RAZORPAY ORDER
 const createRazorpayOrder = async (req, res) => {
     try {
-        const { amount } = req.body; // Amount in INR
+        const { amount } = req.body;
         const options = {
-            amount: Number(amount) * 100, // Convert to paise
+            amount: Number(amount) * 100,
             currency: "INR",
             receipt: `receipt_${Date.now()}`
         };
 
         const order = await razorpay.orders.create(options);
         
-        // Pass order details AND active Key ID for Popup
         res.status(200).json({ 
             success: true, 
             order,
@@ -228,13 +222,13 @@ const createRazorpayOrder = async (req, res) => {
     }
 };
 
-// 💳 VERIFY RAZORPAY PAYMENT & SAVE BOOKING
+// 💳 VERIFY RAZORPAY PAYMENT & SAVE BOOKING + SEND PDF INVOICE
 const verifyRazorpayPayment = async (req, res) => {
     try {
         const { 
             razorpay_order_id, 
             razorpay_payment_id, 
-            razorpay_signature,
+            razorpay_signature, 
             bookingData 
         } = req.body;
 
@@ -247,14 +241,36 @@ const verifyRazorpayPayment = async (req, res) => {
             .digest("hex");
 
         if (expectedSignature === razorpay_signature) {
+            const currentUserId = req.user.id || req.user._id || bookingData.userId;
+
             const newBooking = await Booking.create({
-                ...bookingData,
-                listing: req.params.id,
-                user: req.user.id,
-                paymentStatus: "Paid",
-                paymentId: razorpay_payment_id,
-                orderId: razorpay_order_id
+                hotelId: bookingData.hotelId || req.params.id,
+                roomId: bookingData.roomId || req.params.id,
+                userId: currentUserId,
+                checkInDate: bookingData.checkInDate,
+                checkOutDate: bookingData.checkOutDate,
+                totalPrice: bookingData.totalPrice,
+                guests: bookingData.guests || [],
+                status: 'Confirmed',
+                paymentId: razorpay_payment_id
             });
+
+            // ✉️ Send Automated Invoice Email
+            (async () => {
+                try {
+                    const guestUser = await User.findById(currentUserId);
+                    const stayListing = await Listing.findById(req.params.id);
+
+                    if (guestUser && guestUser.email) {
+                        console.log(`[Invoice] Sending booking invoice to: ${guestUser.email}`);
+                        await sendBookingConfirmationEmail(newBooking, guestUser, stayListing || {});
+                    } else {
+                        console.warn('[Invoice] User email not found for ID:', currentUserId);
+                    }
+                } catch (mailErr) {
+                    console.error("[Invoice Dispatch Error]:", mailErr.message);
+                }
+            })();
 
             return res.status(201).json({ 
                 success: true, 
@@ -265,6 +281,7 @@ const verifyRazorpayPayment = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid payment signature!" });
         }
     } catch (error) {
+        console.error("Razorpay verification error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
