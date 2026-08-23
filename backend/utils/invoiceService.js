@@ -1,9 +1,12 @@
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 
-// 1. Configure Email Transporter (Gmail App Password)
+// 1. Configure Email Transporter
 const transporter = nodemailer.createTransport({
     service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
@@ -44,7 +47,7 @@ const generateInvoiceBuffer = (booking, user, listing) => {
         doc.text(`Status: Paid & Confirmed`, 50, startY + 30);
 
         doc.text(`Billed To:`, 350, startY);
-        doc.fillColor('#000000').fontSize(11).text(user.name || 'Valued Guest', 350, startY + 15);
+        doc.fillColor('#000000').fontSize(11).text(user.username || user.name || 'Valued Guest', 350, startY + 15);
         doc.fontSize(10).fillColor('#666666').text(user.email || '', 350, startY + 30);
 
         // Stay Summary Box
@@ -87,8 +90,11 @@ const generateInvoiceBuffer = (booking, user, listing) => {
 // 3. Send Confirmation Email with PDF Attachment
 const sendBookingConfirmationEmail = async (booking, user, listing) => {
     try {
+        console.log(`[Invoice] Attempting to send email to: ${user.email}`);
+        console.log(`[Invoice] Configured Sender: ${process.env.EMAIL_USER}`);
+
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.log('Skipping email: EMAIL_USER or EMAIL_PASS not configured in .env');
+            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS is missing in environment variables!');
             return;
         }
 
@@ -105,12 +111,12 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
                         <p style="margin: 5px 0 0 0;">Pack your bags, your trip is set!</p>
                     </div>
                     <div style="padding: 20px;">
-                        <p>Hi <strong>${user.name || 'Traveller'}</strong>,</p>
+                        <p>Hi <strong>${user.username || user.name || 'Traveller'}</strong>,</p>
                         <p>Thank you for your reservation with StayHub. Here are your booking details:</p>
                         
                         <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                            <h3 style="margin-top: 0; color: #FF385C;">${listing.title}</h3>
-                            <p style="margin: 4px 0;"><strong>Location:</strong> ${listing.location}, ${listing.country}</p>
+                            <h3 style="margin-top: 0; color: #FF385C;">${listing.title || 'StayHub Stay'}</h3>
+                            <p style="margin: 4px 0;"><strong>Location:</strong> ${listing.location || ''}, ${listing.country || ''}</p>
                             <p style="margin: 4px 0;"><strong>Check-In:</strong> ${new Date(booking.checkInDate || booking.checkIn).toLocaleDateString('en-IN')}</p>
                             <p style="margin: 4px 0;"><strong>Check-Out:</strong> ${new Date(booking.checkOutDate || booking.checkOut).toLocaleDateString('en-IN')}</p>
                             <p style="margin: 4px 0;"><strong>Total Paid:</strong> ₹${booking.totalPrice?.toLocaleString('en-IN')}</p>
@@ -131,9 +137,9 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log('Confirmation Email sent:', info.messageId);
+        console.log('[Invoice Success] Email delivered! MessageID:', info.messageId);
     } catch (err) {
-        console.error('Error sending confirmation email:', err.message);
+        console.error('[Invoice Transporter Error]:', err.message);
     }
 };
 

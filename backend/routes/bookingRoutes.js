@@ -4,8 +4,44 @@ const Booking = require('../models/Booking');
 const Inventory = require('../models/Inventory');
 const Room = require('../models/Room');
 const Listing = require('../models/Listing');
-const User = require('../models/User'); // 👈 User import for email address
-const { sendBookingConfirmationEmail } = require('../utils/invoiceService'); // 👈 Invoice & Email service
+const User = require('../models/User'); 
+const { sendBookingConfirmationEmail } = require('../utils/invoiceService'); 
+
+// 🧪 0. Instant Test Email Route (Check if Gmail Credentials & Nodemailer are working)
+router.get('/test-email', async (req, res) => {
+    try {
+        const testUser = { 
+            email: process.env.EMAIL_USER, 
+            username: "Admin Tester", 
+            name: "Admin Tester" 
+        };
+        const testBooking = { 
+            _id: "66c5f77889abcdef12345678", 
+            checkInDate: new Date(), 
+            checkOutDate: new Date(Date.now() + 86400000), 
+            totalPrice: 4999 
+        };
+        const testListing = { 
+            title: "StayHub Luxury Beach Villa", 
+            location: "Goa", 
+            country: "India" 
+        };
+
+        console.log(`[Test Email] Sending test email to: ${process.env.EMAIL_USER}`);
+        await sendBookingConfirmationEmail(testBooking, testUser, testListing);
+
+        res.status(200).send(`
+            <div style="font-family: Arial; padding: 20px; text-align: center;">
+                <h2 style="color: #28a745;">✅ Test Email Triggered Successfully!</h2>
+                <p>An invoice email was dispatched to: <b>${process.env.EMAIL_USER}</b></p>
+                <p>Please check your Gmail <b>Inbox</b> and <b>Spam folder</b>.</p>
+            </div>
+        `);
+    } catch (err) {
+        console.error("[Test Email Error]:", err);
+        res.status(500).send(`<h3>Failed to send test email: ${err.message}</h3>`);
+    }
+});
 
 // 1. Nayi Booking Create Karne Ka Safe Route
 router.post('/create', async (req, res) => {
