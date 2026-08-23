@@ -1,43 +1,29 @@
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 
-// 1. Cloud-Friendly Gmail SMTP Transporter (Port 587 with STARTTLS)
+// 1. Direct Gmail Service Transporter (Standard Production Setup)
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Standard for port 587
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false
     }
 });
 
-// 2. Generate PDF Buffer in Memory
+// 2. Fast In-Memory PDF Invoice Buffer
 const generateInvoiceBuffer = (booking, user, listing) => {
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 50 });
             const buffers = [];
 
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => {
-                const pdfData = Buffer.concat(buffers);
-                resolve(pdfData);
-            });
-            doc.on('error', (err) => reject(err));
+            doc.on('data', chunk => buffers.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(buffers)));
+            doc.on('error', err => reject(err));
 
             // Header Branding
-            doc.fillColor('#FF385C')
-               .fontSize(24)
-               .text('StayHub', 50, 50, { bold: true });
-            
-            doc.fillColor('#333333')
-               .fontSize(10)
-               .text('Official Booking Invoice & Receipt', 50, 78);
-
+            doc.fillColor('#FF385C').fontSize(24).text('StayHub', 50, 50, { bold: true });
+            doc.fillColor('#333333').fontSize(10).text('Official Booking Invoice & Receipt', 50, 78);
             doc.strokeColor('#e0e0e0').lineWidth(1).moveTo(50, 95).lineTo(550, 95).stroke();
 
             // Invoice Meta Details
@@ -77,7 +63,7 @@ const generateInvoiceBuffer = (booking, user, listing) => {
 
             // Footer Note
             doc.fontSize(9).fillColor('#888888').text(
-                'Thank you for booking with StayHub! For any support or inquiries, reach us at support@stayhub.com',
+                'Thank you for choosing StayHub! For any queries, reach us at support@stayhub.com',
                 50,
                 680,
                 { align: 'center', width: 500 }
@@ -93,10 +79,10 @@ const generateInvoiceBuffer = (booking, user, listing) => {
 // 3. Send Confirmation Email with PDF Attachment
 const sendBookingConfirmationEmail = async (booking, user, listing) => {
     try {
-        console.log(`[Invoice] Starting mail dispatch to: ${user.email}`);
+        console.log(`[Invoice] Preparing mail for: ${user.email}`);
 
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS missing in environment!');
+            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS is missing in env!');
             return;
         }
 
@@ -118,7 +104,7 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
                         
                         <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
                             <h3 style="margin-top: 0; color: #FF385C;">${listing.title || 'StayHub Stay'}</h3>
-                            <p style="margin: 4px 0;"><strong>Location:</strong> ${listing.location || ''}, ${listing.country || ''}</p>
+                            <p style="margin: 4px 0;"><strong>Location:</strong> ${listing.location || ''}, ${listing.country || 'India'}</p>
                             <p style="margin: 4px 0;"><strong>Check-In:</strong> ${new Date(booking.checkInDate || Date.now()).toLocaleDateString('en-IN')}</p>
                             <p style="margin: 4px 0;"><strong>Check-Out:</strong> ${new Date(booking.checkOutDate || Date.now()).toLocaleDateString('en-IN')}</p>
                             <p style="margin: 4px 0;"><strong>Total Paid:</strong> ₹${(booking.totalPrice || 0).toLocaleString('en-IN')}</p>
@@ -131,7 +117,7 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
             `,
             attachments: [
                 {
-                    filename: `StayHub_Invoice_${(booking._id || 'receipt').toString().slice(-6)}.pdf`,
+                    filename: `StayHub_Invoice_${(booking._id || 'booking').toString().slice(-6)}.pdf`,
                     content: pdfBuffer,
                     contentType: 'application/pdf'
                 }
@@ -139,7 +125,7 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log('[Invoice Success] Email delivered! MessageID:', info.messageId);
+        console.log('[Invoice Success] Email successfully sent! ID:', info.messageId);
     } catch (err) {
         console.error('[Invoice Transporter Error]:', err.message);
     }
