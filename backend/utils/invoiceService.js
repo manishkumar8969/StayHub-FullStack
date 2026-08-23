@@ -1,19 +1,19 @@
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 
-// 1. Force IPv4 Connection for Gmail on Render (Fixes ENETUNREACH error)
+// 1. Direct Gmail Service Transporter with connection timeouts
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    family: 4, // 👈 Force IPv4 address lookup (Crucial for Render)
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-    }
+    },
+    connectionTimeout: 10000, // 10 seconds timeout
+    greetingTimeout: 10000,
+    socketTimeout: 15000
 });
 
-// 2. Fast In-Memory PDF Invoice Buffer
+// 2. In-Memory PDF Invoice Buffer
 const generateInvoiceBuffer = (booking, user, listing) => {
     return new Promise((resolve, reject) => {
         try {
@@ -66,7 +66,7 @@ const generateInvoiceBuffer = (booking, user, listing) => {
 
             // Footer Note
             doc.fontSize(9).fillColor('#888888').text(
-                'Thank you for choosing StayHub! For any queries, reach us at support@stayhub.com',
+                'Thank you for booking with StayHub! For any inquiries, reach us at support@stayhub.com',
                 50,
                 680,
                 { align: 'center', width: 500 }
@@ -82,10 +82,10 @@ const generateInvoiceBuffer = (booking, user, listing) => {
 // 3. Send Confirmation Email with PDF Attachment
 const sendBookingConfirmationEmail = async (booking, user, listing) => {
     try {
-        console.log(`[Invoice] Preparing mail for: ${user.email}`);
+        console.log(`[Invoice] Starting mail send to: ${user.email}`);
 
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS missing in env!');
+            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS missing in environment!');
             return;
         }
 
@@ -128,9 +128,9 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log('[Invoice Success] Email successfully sent! ID:', info.messageId);
+        console.log('[Invoice Success] Email delivered! MessageID:', info.messageId);
     } catch (err) {
-        console.error('[Invoice Transporter Error]:', err.message);
+        console.error('[Invoice Transporter Error]:', err.message || err);
     }
 };
 
