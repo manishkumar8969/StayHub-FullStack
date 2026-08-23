@@ -1,16 +1,23 @@
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 
-// 1. Direct Gmail Service Transporter with connection timeouts
+// 1. Force IPv4 socket resolution (Fixes Render ENETUNREACH IPv6 issue)
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    connectionTimeout: 10000, // 10 seconds timeout
-    greetingTimeout: 10000,
-    socketTimeout: 15000
+    tls: {
+        rejectUnauthorized: false
+    },
+    // Force Node.js dns lookup to only return IPv4 (family 4)
+    lookup: (hostname, options, callback) => {
+        const dns = require('dns');
+        dns.lookup(hostname, { family: 4 }, callback);
+    }
 });
 
 // 2. In-Memory PDF Invoice Buffer
@@ -82,10 +89,10 @@ const generateInvoiceBuffer = (booking, user, listing) => {
 // 3. Send Confirmation Email with PDF Attachment
 const sendBookingConfirmationEmail = async (booking, user, listing) => {
     try {
-        console.log(`[Invoice] Starting mail send to: ${user.email}`);
+        console.log(`[Invoice] Dispatching mail to: ${user.email}`);
 
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS missing in environment!');
+            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS missing in env!');
             return;
         }
 
