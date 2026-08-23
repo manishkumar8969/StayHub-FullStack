@@ -1,26 +1,9 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const PDFDocument = require('pdfkit');
 
-// 1. Force IPv4 socket resolution (Fixes Render ENETUNREACH IPv6 issue)
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false
-    },
-    // Force Node.js dns lookup to only return IPv4 (family 4)
-    lookup: (hostname, options, callback) => {
-        const dns = require('dns');
-        dns.lookup(hostname, { family: 4 }, callback);
-    }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// 2. In-Memory PDF Invoice Buffer
+// In-Memory PDF Invoice Buffer
 const generateInvoiceBuffer = (booking, user, listing) => {
     return new Promise((resolve, reject) => {
         try {
@@ -73,7 +56,7 @@ const generateInvoiceBuffer = (booking, user, listing) => {
 
             // Footer Note
             doc.fontSize(9).fillColor('#888888').text(
-                'Thank you for booking with StayHub! For any inquiries, reach us at support@stayhub.com',
+                'Thank you for choosing StayHub! For any queries, reach us at support@stayhub.com',
                 50,
                 680,
                 { align: 'center', width: 500 }
@@ -86,20 +69,15 @@ const generateInvoiceBuffer = (booking, user, listing) => {
     });
 };
 
-// 3. Send Confirmation Email with PDF Attachment
+// Send Confirmation Email via Resend HTTPS API
 const sendBookingConfirmationEmail = async (booking, user, listing) => {
     try {
-        console.log(`[Invoice] Dispatching mail to: ${user.email}`);
-
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS missing in env!');
-            return;
-        }
+        console.log(`[Invoice] Dispatching via Resend API to: ${user.email}`);
 
         const pdfBuffer = await generateInvoiceBuffer(booking, user, listing);
 
-        const mailOptions = {
-            from: `"StayHub Reservations" <${process.env.EMAIL_USER}>`,
+        const data = await resend.emails.send({
+            from: 'StayHub <onboarding@resend.dev>', // Default Resend verified test sender
             to: user.email,
             subject: `Booking Confirmed: ${listing.title || 'Your Stay'} (Ref: #${(booking._id || '').toString().slice(-6)})`,
             html: `
@@ -128,16 +106,14 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
             attachments: [
                 {
                     filename: `StayHub_Invoice_${(booking._id || 'booking').toString().slice(-6)}.pdf`,
-                    content: pdfBuffer,
-                    contentType: 'application/pdf'
+                    content: pdfBuffer
                 }
             ]
-        };
+        });
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('[Invoice Success] Email delivered! MessageID:', info.messageId);
+        console.log('[Invoice Success] Email delivered via Resend! ID:', data.id);
     } catch (err) {
-        console.error('[Invoice Transporter Error]:', err.message || err);
+        console.error('[Resend Error]:', err.message || err);
     }
 };
 
