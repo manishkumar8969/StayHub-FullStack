@@ -1,9 +1,12 @@
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 
-// 1. Direct Gmail Service Transporter (Standard Production Setup)
+// 1. Force IPv4 Connection for Gmail on Render (Fixes ENETUNREACH error)
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    family: 4, // 👈 Force IPv4 address lookup (Crucial for Render)
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
@@ -82,7 +85,7 @@ const sendBookingConfirmationEmail = async (booking, user, listing) => {
         console.log(`[Invoice] Preparing mail for: ${user.email}`);
 
         if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS is missing in env!');
+            console.error('[Invoice Error] EMAIL_USER or EMAIL_PASS missing in env!');
             return;
         }
 
