@@ -103,12 +103,25 @@ router.post('/create', async (req, res) => {
             );
         }
 
-        // ✉️ Trigger Automated PDF Invoice Email
+       // ✉️ Trigger Automated PDF Invoice Email (Async - Non Blocking)
         try {
-            const guestUser = await User.findById(userId);
+            let guestUser = null;
+            if (userId) {
+                guestUser = await User.findById(userId);
+            }
+            
+            // Agar User model se na mile toh request body ya guests list se email uthao
+            if (!guestUser && guests && guests.length > 0 && guests[0].email) {
+                guestUser = { email: guests[0].email, name: guests[0].name || 'Guest' };
+            }
+
             const stayListing = await Listing.findById(hotelId);
+            
             if (guestUser && guestUser.email) {
+                console.log(`[Invoice] Initiating email for: ${guestUser.email}`);
                 sendBookingConfirmationEmail(newBooking, guestUser, stayListing || {});
+            } else {
+                console.log('[Invoice Warning] User email not found for booking notification.');
             }
         } catch (mailErr) {
             console.error("Mail trigger error:", mailErr.message);
